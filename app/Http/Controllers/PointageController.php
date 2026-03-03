@@ -6,13 +6,23 @@ use App\Models\Session;
 use App\Models\User;
 use App\Notifications\NewSessionPointed;
 use App\Notifications\SessionStatusUpdated;
+use App\Services\ExpoPushService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
+use Illuminate\Validation\Rule;
 
 class PointageController extends Controller
 {
+    private const TIME_SLOTS = [
+        ['08:00', '09:30'],
+        ['09:45', '11:15'],
+        ['11:30', '13:00'],
+        ['15:00', '16:30'],
+        ['17:00', '18:30'],
+    ];
+
     public function index()
     {
         $user = Auth::user();
@@ -26,15 +36,32 @@ class PointageController extends Controller
 
     public function store(Request $request)
     {
+        $user = Auth::user();
+        if (!$user || $user->role !== 'ENSEIGNANT') {
+            return response()->json(['message' => 'Non autorisé'], 403);
+        }
+
+        $allowedStarts = array_map(fn ($s) => $s[0], self::TIME_SLOTS);
+        $allowedEnds = array_map(fn ($s) => $s[1], self::TIME_SLOTS);
+
         $request->validate([
             'matiere_id' => 'required|exists:matieres,id',
             'date' => 'required|date',
-            'heure_debut' => 'required',
-            'heure_fin' => 'required',
+            'heure_debut' => ['required', 'date_format:H:i', Rule::in($allowedStarts)],
+            'heure_fin' => ['required', 'date_format:H:i', Rule::in($allowedEnds)],
             'type_seance' => 'required|in:CM,TD,TP',
             'annee_scolaire_id' => 'required|exists:annee_scolaires,id',
         ]);
 
+        $slotValid = in_array([$request->heure_debut, $request->heure_fin], self::TIME_SLOTS, true);
+        if (!$slotValid) {
+            return response()->json(['message' => "Horaire invalide"], 422);
+        }
+
+        $matiereId = (int) $request->matiere_id;
+        if (!$user->matieres()->whereKey($matiereId)->exists()) {
+            return response()->json(['message' => "Matière non assignée à cet enseignant."], 403);
+        }
         // Basic duration calculation (can be improved)
         $start = strtotime($request->heure_debut);
         $end = strtotime($request->heure_fin);
@@ -42,7 +69,7 @@ class PointageController extends Controller
 
         $session = Session::create([
             'enseignant_id' => Auth::id(),
-            'matiere_id' => $request->matiere_id,
+            'matiere_id' => $matiereId,
             'annee_scolaire_id' => $request->annee_scolaire_id,
             'date' => $request->date,
             'heure_debut' => $request->heure_debut,
@@ -52,9 +79,20 @@ class PointageController extends Controller
             'statut' => 'EN_ATTENTE',
         ]);
 
-        // Notify all agents
-        $agents = User::where('role', 'AGENT_SCOLARITE')->get();
+        $session->load(['teacher', 'matiere']);
+
+        // Notify admin + agent scolarité
+        $agents = User::whereIn('role', ['AGENT_SCOLARITE', 'ADMINISTRATEUR'])->get();
         Notification::send($agents, new NewSessionPointed($session));
+        app(ExpoPushService::class)->sendToUsers(
+            $agents,
+            'Nouvelle séance à valider',
+            ($session->teacher->name ?? 'Un enseignant') . ' a pointé une séance.',
+            [
+                'type' => 'new_session',
+                'session_id' => $session->id,
+            ]
+        );
 
         return response()->json($session, 201);
     }
@@ -73,20 +111,36 @@ class PointageController extends Controller
             return response()->json(['message' => 'Impossible de modifier une séance déjà validée ou rejetée'], 422);
         }
 
+        $allowedStarts = array_map(fn ($s) => $s[0], self::TIME_SLOTS);
+        $allowedEnds = array_map(fn ($s) => $s[1], self::TIME_SLOTS);
+
         $request->validate([
             'matiere_id' => 'required|exists:matieres,id',
             'date' => 'required|date',
-            'heure_debut' => 'required',
-            'heure_fin' => 'required',
+            'heure_debut' => ['required', 'date_format:H:i', Rule::in($allowedStarts)],
+            'heure_fin' => ['required', 'date_format:H:i', Rule::in($allowedEnds)],
             'type_seance' => 'required|in:CM,TD,TP',
         ]);
 
+        $slotValid = in_array([$request->heure_debut, $request->heure_fin], self::TIME_SLOTS, true);
+        if (!$slotValid) {
+            return response()->json(['message' => "Horaire invalide"], 422);
+        }
+
+        $user = Auth::user();
+        $matiereId = (int) $request->matiere_id;
+        if (!$user || $user->role !== 'ENSEIGNANT') {
+            return response()->json(['message' => 'Non autorisé'], 403);
+        }
+        if (!$user->matieres()->whereKey($matiereId)->exists()) {
+            return response()->json(['message' => "Matière non assignée à cet enseignant."], 403);
+        }
         $start = strtotime($request->heure_debut);
         $end = strtotime($request->heure_fin);
         $duree = ($end - $start) / 3600;
 
         $session->update([
-            'matiere_id' => $request->matiere_id,
+            'matiere_id' => $matiereId,
             'date' => $request->date,
             'heure_debut' => $request->heure_debut,
             'heure_fin' => $request->heure_fin,
@@ -127,6 +181,15 @@ class PointageController extends Controller
         return response()->json($sessions);
     }
 
+    public function validated()
+    {
+        $sessions = Session::with(['teacher', 'matiere'])
+            ->whereIn('statut', ['APPROUVE', 'REJETE'])
+            ->orderBy('date', 'desc')
+            ->get();
+
+        return response()->json($sessions);
+    }
     public function approve(Request $request, $id)
     {
         $session = Session::with(['teacher', 'matiere'])->findOrFail($id);
@@ -141,6 +204,16 @@ class PointageController extends Controller
         
         // Notify the teacher
         $session->teacher->notify(new SessionStatusUpdated($session, 'APPROUVE'));
+        app(ExpoPushService::class)->sendToUsers(
+            [$session->teacher],
+            'Séance approuvée',
+            'Votre séance a été approuvée.',
+            [
+                'type' => 'status_update',
+                'session_id' => $session->id,
+                'status' => 'APPROUVE',
+            ]
+        );
 
         return response()->json($session);
     }
@@ -162,6 +235,16 @@ class PointageController extends Controller
         
         // Notify the teacher
         $session->teacher->notify(new SessionStatusUpdated($session, 'REJETE'));
+        app(ExpoPushService::class)->sendToUsers(
+            [$session->teacher],
+            'Séance rejetée',
+            'Votre séance a été rejetée.',
+            [
+                'type' => 'status_update',
+                'session_id' => $session->id,
+                'status' => 'REJETE',
+            ]
+        );
 
         return response()->json($session);
     }

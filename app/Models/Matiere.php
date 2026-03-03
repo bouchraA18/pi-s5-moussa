@@ -24,4 +24,10 @@ class Matiere extends Model
     {
         return $this->hasMany(Session::class);
     }
+
+    public function teachers()
+    {
+        return $this->belongsToMany(User::class, 'teacher_matieres', 'matiere_id', 'teacher_id')
+            ->withTimestamps();
+    }
 }

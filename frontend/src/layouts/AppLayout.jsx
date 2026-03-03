@@ -4,7 +4,8 @@ import { LogOut, User, Bell, Clock, Check, History, MessageSquare, Trash2 } from
 import api, { authService } from '../services/api';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const AppLayout = ({ children, title }) => {
+<<<<<<< HEAD
+const AppLayout = ({ children, title, navbarContent }) => {
     const navigate = useNavigate();
     const user = authService.getCurrentUser();
     const [notifications, setNotifications] = React.useState([]);
@@ -60,45 +61,75 @@ const AppLayout = ({ children, title }) => {
         navigate('/login');
     };
 
+    const handleHome = () => {
+        if (!user) {
+            navigate('/login');
+            return;
+        }
+        if (user.role === 'ENSEIGNANT') {
+            navigate('/teacher-dashboard');
+            return;
+        }
+        navigate('/agent-dashboard');
+    };
+
     return (
         <div className="min-h-screen bg-slate-50 flex flex-col">
             {/* Navbar */}
             <nav className="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                    <div className="flex justify-between h-16 items-center">
-                        <div className="flex items-center gap-2">
-                            <div className="w-10 h-10 bg-primary-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-primary-600/20">
-                                <Clock size={24} />
-                            </div>
-                            <span className="text-xl font-bold bg-gradient-to-r from-primary-600 to-primary-800 bg-clip-text text-transparent">
-                                ClassTrack
-                            </span>
+                    <div className="flex h-16 items-center">
+                        <div className="flex items-center gap-4 flex-1 min-w-0">
+                            <button
+                                type="button"
+                                onClick={handleHome}
+                                className="flex items-center gap-2"
+                                title="Accueil"
+                            >
+                                <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-lg border border-slate-200 overflow-hidden">
+                                    <img
+                                        src="/supnum-logo.png"
+                                        alt="SupNum"
+                                        className="w-8 h-8 object-contain"
+                                        draggable={false}
+                                    />
+                                </div>
+                                <span className="text-xl font-bold bg-gradient-to-r from-primary-600 to-primary-800 bg-clip-text text-transparent">
+                                    ClassTrack
+                                </span>
+                            </button>
+
+                            {/* Navigation Links for Admin/Agent */}
+                            {user?.role === 'ADMINISTRATEUR' && (
+                                <div className="hidden md:flex items-center space-x-1 ml-10">
+                                    <button
+                                        onClick={() => navigate('/agent-dashboard')}
+                                        className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${window.location.pathname === '/agent-dashboard' ? 'bg-primary-50 text-primary-700' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'}`}
+                                    >
+                                        Tableau de Bord
+                                    </button>
+                                    <button
+                                        onClick={() => navigate('/admin/users')}
+                                        className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${window.location.pathname === '/admin/users' ? 'bg-primary-50 text-primary-700' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'}`}
+                                    >
+                                        Utilisateurs
+                                    </button>
+                                    <button
+                                        onClick={() => navigate('/admin/matieres')}
+                                        className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${window.location.pathname === '/admin/matieres' ? 'bg-primary-50 text-primary-700' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'}`}
+                                    >
+                                        Matières & Modules
+                                    </button>
+                                </div>
+                            )}
+
+                            {navbarContent ? (
+                                <div className="flex items-center ml-6 min-w-0">
+                                    {navbarContent}
+                                </div>
+                            ) : null}
+
                         </div>
-
-                        {/* Navigation Links for Admin/Agent */}
-                        {user?.role === 'ADMINISTRATEUR' && (
-                            <div className="hidden md:flex items-center space-x-1 ml-10">
-                                <button
-                                    onClick={() => navigate('/agent-dashboard')}
-                                    className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${window.location.pathname === '/agent-dashboard' ? 'bg-primary-50 text-primary-700' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'}`}
-                                >
-                                    Tableau de Bord
-                                </button>
-                                <button
-                                    onClick={() => navigate('/admin/users')}
-                                    className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${window.location.pathname === '/admin/users' ? 'bg-primary-50 text-primary-700' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'}`}
-                                >
-                                    Utilisateurs
-                                </button>
-                                <button
-                                    onClick={() => navigate('/admin/matieres')}
-                                    className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${window.location.pathname === '/admin/matieres' ? 'bg-primary-50 text-primary-700' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'}`}
-                                >
-                                    Matières & Modules
-                                </button>
-                            </div>
-                        )}
-
                         <div className="flex items-center gap-4">
                             <div className="relative">
                                 <button

@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import api from '../services/api';
-import { Lock, Mail, ArrowRight, Loader2, GraduationCap, CheckCircle2, User, Phone } from 'lucide-react';
+import { Lock, Mail, ArrowRight, Loader2, CheckCircle2, User, Phone, GraduationCap } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { normalizeSchoolEmail } from '../utils/email';
 
 const RegisterPage = () => {
     const [formData, setFormData] = useState({
@@ -27,8 +28,25 @@ const RegisterPage = () => {
         setLoading(true);
         setError('');
 
+        let normalizedEmail = '';
         try {
-            const response = await api.post('/register', formData);
+            normalizedEmail = normalizeSchoolEmail(formData.email);
+        } catch (err) {
+            const data = err?.response?.data;
+            const firstValidationError = data?.errors
+                ? Object.values(data.errors)[0]?.[0]
+                : undefined;
+            if (firstValidationError) {
+                setError(firstValidationError);
+                return;
+            }
+            setError(err?.message || 'Email invalide.');
+            setLoading(false);
+            return;
+        }
+
+        try {
+            const response = await api.post('/register', { ...formData, email: normalizedEmail });
 
             // Store token and user
             localStorage.setItem('token', response.data.token);
@@ -80,8 +98,13 @@ const RegisterPage = () => {
                         transition={{ delay: 0.2 }}
                     >
                         <div className="flex items-center gap-3 mb-8">
-                            <div className="w-12 h-12 bg-white/10 backdrop-blur-md rounded-xl flex items-center justify-center border border-white/20">
-                                <GraduationCap size={28} className="text-white" />
+                            <div className="w-12 h-12 bg-white/90 backdrop-blur-md rounded-xl flex items-center justify-center border border-white/30 overflow-hidden">
+                                <img
+                                    src="/supnum-logo.png"
+                                    alt="SupNum"
+                                    className="w-9 h-9 object-contain"
+                                    draggable={false}
+                                />
                             </div>
                             <span className="text-3xl font-bold tracking-tight">ClassTrack</span>
                         </div>
@@ -127,8 +150,13 @@ const RegisterPage = () => {
                     className="w-full max-w-lg bg-white p-10 md:p-14 rounded-[2.5rem] shadow-2xl border border-slate-100 my-8"
                 >
                     <div className="text-center mb-8">
-                        <div className="w-20 h-20 bg-primary-600 rounded-2xl flex items-center justify-center mx-auto mb-6 text-white shadow-lg shadow-primary-200">
-                            <GraduationCap size={40} />
+                        <div className="w-20 h-20 bg-white rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg border border-slate-200 overflow-hidden">
+                            <img
+                                src="/supnum-logo.png"
+                                alt="SupNum"
+                                className="w-14 h-14 object-contain"
+                                draggable={false}
+                            />
                         </div>
                         <h2 className="text-4xl font-extrabold text-slate-900 tracking-tight">Inscription</h2>
                         <p className="text-slate-500 mt-3 text-lg font-medium">Créez votre compte enseignant</p>
@@ -198,13 +226,13 @@ const RegisterPage = () => {
                             <div className="relative group">
                                 <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary-500 transition-colors" size={20} />
                                 <input
-                                    type="email"
+                                    type="text"
                                     name="email"
                                     required
                                     value={formData.email}
                                     onChange={handleChange}
                                     className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none transition-all font-medium"
-                                    placeholder="jean.dupont@université.com"
+                                    placeholder="prenom.nom@supnum.mr"
                                 />
                             </div>
                         </div>

@@ -14,6 +14,8 @@ import {
     AlertCircle,
     TrendingUp,
     BarChart3,
+    Plus,
+    BookOpen,
     Filter,
     ChevronRight,
     ArrowUpRight
@@ -21,6 +23,19 @@ import {
 import api from '../services/api';
 import { motion, AnimatePresence } from 'framer-motion';
 
+const globalSemesterLabel = (niveau, semestre) => {
+    const n = String(niveau || '');
+    const s = Number(semestre || 0);
+    const offsets = {
+        L1: 0,
+        L2: 2,
+        L3: 4,
+        M1: 0,
+        M2: 2,
+    };
+    const offset = offsets[n] ?? 0;
+    return `S${offset + s}`;
+};
 const AgentDashboard = () => {
     const [activeTab, setActiveTab] = useState('pending');
     const [pointages, setPointages] = useState([]);
@@ -43,6 +58,124 @@ const AgentDashboard = () => {
 
     const [rejectionModal, setRejectionModal] = useState({ show: false, sessionId: null, reason: '' });
 
+    // Assignments (Agent/Admin): assign matieres to teachers by semester
+    const [assignModalOpen, setAssignModalOpen] = useState(false);
+    const [assignLoading, setAssignLoading] = useState(false);
+    const [assignSaving, setAssignSaving] = useState(false);
+    const [teachers, setTeachers] = useState([]);
+    const [availableNiveaux, setAvailableNiveaux] = useState([]);
+    const [assignTeacherId, setAssignTeacherId] = useState('');
+    const [assignNiveau, setAssignNiveau] = useState('');
+    const [assignSemestre, setAssignSemestre] = useState(1);
+    const [assignMatieres, setAssignMatieres] = useState([]);
+    const [assignSelectedMatiereIds, setAssignSelectedMatiereIds] = useState([]);
+
+    const refreshAssignData = async (teacherId, niveau, semestre) => {
+        if (!teacherId || !niveau || !semestre) {
+            setAssignMatieres([]);
+            setAssignSelectedMatiereIds([]);
+            return;
+        }
+        setAssignLoading(true);
+        try {
+            const [matieresRes, assignedRes] = await Promise.all([
+                api.get('/matieres', { params: { niveau, semestre } }),
+                api.get('/admin/teacher-semester-matieres', {
+                    params: { teacher_id: teacherId, niveau, semestre }
+                })
+            ]);
+            setAssignMatieres(Array.isArray(matieresRes.data) ? matieresRes.data : []);
+            setAssignSelectedMatiereIds(
+                Array.isArray(assignedRes.data?.matiere_ids)
+                    ? assignedRes.data.matiere_ids.map((id) => String(id))
+                    : []
+            );
+        } catch (err) {
+            console.error("Error fetching assignment data:", err);
+            setAssignMatieres([]);
+            setAssignSelectedMatiereIds([]);
+        } finally {
+            setAssignLoading(false);
+        }
+    };
+
+    const openAssignModal = async () => {
+        setAssignModalOpen(true);
+        setAssignLoading(true);
+        try {
+            const [usersRes, matieresAllRes] = await Promise.all([
+                api.get('/users'),
+                api.get('/matieres')
+            ]);
+
+            const allUsers = Array.isArray(usersRes.data)
+                ? usersRes.data
+                : Array.isArray(usersRes.data?.data)
+                    ? usersRes.data.data
+                    : [];
+
+            const nextTeachers = allUsers.filter((u) => u?.role === 'ENSEIGNANT');
+            setTeachers(nextTeachers);
+
+            const matieresAll = Array.isArray(matieresAllRes.data) ? matieresAllRes.data : [];
+            const niveaux = Array.from(new Set(matieresAll.map((m) => String(m.niveau || '')).filter(Boolean))).sort();
+            setAvailableNiveaux(niveaux);
+
+            const nextTeacherId = nextTeachers[0]?.id ? String(nextTeachers[0].id) : '';
+            const nextNiveau = niveaux[0] || '';
+            const nextSemestre = 1;
+
+            setAssignTeacherId(nextTeacherId);
+            setAssignNiveau(nextNiveau);
+            setAssignSemestre(nextSemestre);
+
+            await refreshAssignData(nextTeacherId, nextNiveau, nextSemestre);
+        } catch (err) {
+            console.error("Error opening assignment modal:", err);
+        } finally {
+            setAssignLoading(false);
+        }
+    };
+
+    const closeAssignModal = () => {
+        setAssignModalOpen(false);
+        setAssignSaving(false);
+    };
+
+    useEffect(() => {
+        if (!assignModalOpen) return;
+        refreshAssignData(assignTeacherId, assignNiveau, assignSemestre);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [assignModalOpen, assignTeacherId, assignNiveau, assignSemestre]);
+
+    const toggleAssignMatiere = (id) => {
+        const sid = String(id);
+        setAssignSelectedMatiereIds((prev) => {
+            const next = new Set(prev.map(String));
+            if (next.has(sid)) next.delete(sid);
+            else next.add(sid);
+            return Array.from(next);
+        });
+    };
+
+    const saveAssignments = async () => {
+        if (!assignTeacherId || !assignNiveau || !assignSemestre) return;
+        setAssignSaving(true);
+        try {
+            await api.put('/admin/teacher-semester-matieres', {
+                teacher_id: Number(assignTeacherId),
+                niveau: assignNiveau,
+                semestre: Number(assignSemestre),
+                matiere_ids: assignSelectedMatiereIds.map((id) => Number(id)),
+            });
+            alert("Affectations enregistrées !");
+        } catch (err) {
+            console.error("Error saving assignments:", err);
+            alert(err.response?.data?.message || "Erreur lors de l'enregistrement des affectations");
+        } finally {
+            setAssignSaving(false);
+        }
+    };
     const fetchStats = async () => {
         try {
             const res = await api.get('/admin/stats');
@@ -55,7 +188,7 @@ const AgentDashboard = () => {
     const fetchPointages = async () => {
         setLoading(true);
         try {
-            const endpoint = activeTab === 'pending' ? '/admin/pending' : '/pointages';
+            const endpoint = activeTab === 'pending' ? '/admin/pending' : '/admin/validated';
             const res = await api.get(endpoint);
             setPointages(res.data);
         } catch (err) {
@@ -162,6 +295,192 @@ const AgentDashboard = () => {
     return (
         <AppLayout title="Administration Scolarité">
             <div className="min-h-screen bg-slate-50/50 pb-20">
+                {/* Assignment Modal */}
+                <AnimatePresence>
+                    {assignModalOpen && (
+                        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+                            <motion.div
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
+                                onClick={closeAssignModal}
+                            />
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                                className="relative bg-white w-full max-w-3xl rounded-[24px] shadow-2xl overflow-hidden border border-slate-100"
+                            >
+                                <div className="p-8">
+                                    <div className="flex items-start justify-between gap-6 mb-8">
+                                        <div className="flex items-start gap-5">
+                                            <div className="w-14 h-14 bg-primary-50 text-primary-600 rounded-2xl flex items-center justify-center shrink-0">
+                                                <BookOpen size={28} strokeWidth={2.5} />
+                                            </div>
+                                            <div>
+                                                <h3 className="text-2xl font-bold text-slate-900 mb-2">Affectation des Matières</h3>
+                                                <p className="text-slate-500 leading-relaxed">
+                                                    Assignez des matières à un enseignant selon le niveau et le semestre.
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <button
+                                            onClick={closeAssignModal}
+                                            className="p-2.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-50 transition-all"
+                                            title="Fermer"
+                                        >
+                                            <X size={18} strokeWidth={2.5} />
+                                        </button>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                                        <div>
+                                            <label className="block text-xs font-black text-slate-700 uppercase tracking-wide mb-2">
+                                                Enseignant
+                                            </label>
+                                            <select
+                                                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all text-slate-800 font-semibold"
+                                                value={assignTeacherId}
+                                                onChange={(e) => setAssignTeacherId(e.target.value)}
+                                            >
+                                                {teachers.length === 0 ? (
+                                                    <option value="">Aucun enseignant</option>
+                                                ) : (
+                                                    teachers.map((t) => (
+                                                        <option key={t.id} value={String(t.id)}>
+                                                            {t.name} ({t.email})
+                                                        </option>
+                                                    ))
+                                                )}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-black text-slate-700 uppercase tracking-wide mb-2">
+                                                Niveau
+                                            </label>
+                                            <select
+                                                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all text-slate-800 font-semibold"
+                                                value={assignNiveau}
+                                                onChange={(e) => setAssignNiveau(e.target.value)}
+                                            >
+                                                {availableNiveaux.length === 0 ? (
+                                                    <option value="">Aucun niveau</option>
+                                                ) : (
+                                                    availableNiveaux.map((n) => (
+                                                        <option key={n} value={n}>
+                                                            {n}
+                                                        </option>
+                                                    ))
+                                                )}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-black text-slate-700 uppercase tracking-wide mb-2">
+                                                Semestre
+                                            </label>
+                                            <select
+                                                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all text-slate-800 font-semibold"
+                                                value={String(assignSemestre)}
+                                                onChange={(e) => setAssignSemestre(Number(e.target.value))}
+                                            >
+                                                <option value="1">{globalSemesterLabel(assignNiveau, 1)}</option>
+                                                <option value="2">{globalSemesterLabel(assignNiveau, 2)}</option>
+                                            </select>
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4">
+                                        <div className="flex items-center justify-between mb-4">
+                                            <p className="text-xs font-black text-slate-700 uppercase tracking-widest">
+                                                Matières disponibles
+                                            </p>
+                                            <p className="text-xs font-bold text-slate-500">
+                                                {assignSelectedMatiereIds.length} sélectionnée(s)
+                                            </p>
+                                        </div>
+
+                                        {assignLoading ? (
+                                            <div className="py-10 flex items-center justify-center text-slate-500">
+                                                <Loader2 className="animate-spin" size={20} />
+                                                <span className="ml-3 font-semibold">Chargement...</span>
+                                            </div>
+                                        ) : assignMatieres.length === 0 ? (
+                                            <div className="py-10 text-center text-slate-500 font-semibold">
+                                                Aucune matière pour ce niveau/semestre.
+                                            </div>
+                                        ) : (
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                                {assignMatieres.map((m) => {
+                                                    const checked = assignSelectedMatiereIds.includes(String(m.id));
+                                                    return (
+                                                        <button
+                                                            key={m.id}
+                                                            type="button"
+                                                            onClick={() => toggleAssignMatiere(m.id)}
+                                                            className={[
+                                                                "p-4 rounded-2xl border text-left transition-all",
+                                                                checked
+                                                                    ? "bg-white border-primary-200 ring-2 ring-primary-500/10 shadow-sm"
+                                                                    : "bg-white border-slate-200 hover:border-slate-300 hover:shadow-sm",
+                                                            ].join(" ")}
+                                                        >
+                                                            <div className="flex items-start justify-between gap-3">
+                                                                <div>
+                                                                    <p className="text-sm font-extrabold text-slate-900">
+                                                                        {m.nom}
+                                                                    </p>
+                                                                    <p className="text-xs text-slate-500 font-semibold mt-1">
+                                                                        Code: {m.code}
+                                                                    </p>
+                                                                </div>
+                                                                <div
+                                                                    className={[
+                                                                        "w-10 h-10 rounded-xl flex items-center justify-center border",
+                                                                        checked
+                                                                            ? "bg-primary-50 text-primary-600 border-primary-100"
+                                                                            : "bg-slate-50 text-slate-400 border-slate-200",
+                                                                    ].join(" ")}
+                                                                >
+                                                                    {checked ? (
+                                                                        <Check size={18} strokeWidth={3} />
+                                                                    ) : (
+                                                                        <Plus size={18} strokeWidth={3} />
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div className="flex items-center justify-end gap-3 mt-8">
+                                        <button
+                                            onClick={closeAssignModal}
+                                            className="py-3.5 px-6 bg-white border border-slate-200 text-slate-600 font-semibold rounded-xl hover:bg-slate-50 hover:border-slate-300 transition-all"
+                                        >
+                                            Annuler
+                                        </button>
+                                        <button
+                                            onClick={saveAssignments}
+                                            disabled={assignSaving || assignLoading || !assignTeacherId || !assignNiveau}
+                                            className={[
+                                                "py-3.5 px-6 rounded-xl font-semibold shadow-lg transition-all active:scale-[0.98]",
+                                                assignSaving || assignLoading || !assignTeacherId || !assignNiveau
+                                                    ? "bg-slate-200 text-slate-500 cursor-not-allowed"
+                                                    : "bg-primary-600 text-white hover:bg-primary-700 shadow-primary-500/20",
+                                            ].join(" ")}
+                                        >
+                                            {assignSaving ? "Enregistrement..." : "Enregistrer"}
+                                        </button>
+                                    </div>
+                                </div>
+                            </motion.div>
+                        </div>
+                    )}
+                </AnimatePresence>
                 {/* Rejection Modal */}
                 <AnimatePresence>
                     {rejectionModal.show && (
@@ -237,6 +556,14 @@ const AgentDashboard = () => {
                                 <span className="px-4 py-2 bg-white border border-slate-200 rounded-full text-sm font-semibold text-slate-600 shadow-sm">
                                     {new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
                                 </span>
+                                <button
+                                    onClick={openAssignModal}
+                                    className="px-5 py-2.5 bg-primary-600 hover:bg-primary-700 text-white rounded-full text-sm font-extrabold shadow-lg shadow-primary-500/20 transition-all active:scale-[0.98] inline-flex items-center gap-2"
+                                    title="Affecter des matières"
+                                >
+                                    <BookOpen size={16} strokeWidth={2.5} />
+                                    Affectations
+                                </button>
                             </div>
                         </div>
 
@@ -280,8 +607,8 @@ const AgentDashboard = () => {
                                             key={tab}
                                             onClick={() => setActiveTab(tab)}
                                             className={`relative flex-1 lg:flex-none px-6 py-3 rounded-xl text-sm font-bold transition-all duration-200 ${activeTab === tab
-                                                    ? 'bg-white text-slate-900 shadow-sm ring-1 ring-black/5'
-                                                    : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100/50'
+                                                ? 'bg-white text-slate-900 shadow-sm ring-1 ring-black/5'
+                                                : 'text-slate-500 hover:text-slate-700 hover:bg-slate-100/50'
                                                 }`}
                                         >
                                             <div className="flex items-center justify-center gap-2">
@@ -370,8 +697,8 @@ const AgentDashboard = () => {
                                                                 <span className="font-semibold text-slate-700">{p.matiere?.nom}</span>
                                                                 <div className="flex items-center gap-2">
                                                                     <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider border ${p.type_seance === 'CM' ? 'bg-purple-50 text-purple-600 border-purple-100' :
-                                                                            p.type_seance === 'TP' ? 'bg-pink-50 text-pink-600 border-pink-100' :
-                                                                                'bg-orange-50 text-orange-600 border-orange-100'
+                                                                        p.type_seance === 'TP' ? 'bg-pink-50 text-pink-600 border-pink-100' :
+                                                                            'bg-orange-50 text-orange-600 border-orange-100'
                                                                         }`}>
                                                                         {p.type_seance}
                                                                     </span>

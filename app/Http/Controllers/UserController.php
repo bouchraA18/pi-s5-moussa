@@ -23,11 +23,19 @@ class UserController extends Controller
      */
     public function store(Request $request)
     {
+        $domain = (string) config('school.email_domain', 'supnum.mr');
+        $role = (string) $request->input('role', '');
+
+        $emailRules = ['required', 'email', 'unique:users,email'];
+        if ($role !== 'ADMINISTRATEUR') {
+            $emailRules[] = 'ends_with:@' . $domain;
+        }
+
         $request->validate([
             'name' => 'required|string|max:255',
             'nom' => 'nullable|string|max:255',
             'prenom' => 'nullable|string|max:255',
-            'email' => 'required|email|unique:users,email',
+            'email' => $emailRules,
             'role' => 'required|in:ENSEIGNANT,AGENT_SCOLARITE,ADMINISTRATEUR',
             'telephone' => 'nullable|string|max:20',
             'password' => 'required|string|min:8', // Admin sets initial password
@@ -60,12 +68,19 @@ class UserController extends Controller
     public function update(Request $request, $id)
     {
         $user = User::findOrFail($id);
+        $domain = (string) config('school.email_domain', 'supnum.mr');
+        $role = (string) $request->input('role', '');
+
+        $emailRules = ['required', 'email', Rule::unique('users')->ignore($user->id)];
+        if ($role !== 'ADMINISTRATEUR') {
+            $emailRules[] = 'ends_with:@' . $domain;
+        }
 
         $request->validate([
             'name' => 'required|string|max:255',
             'nom' => 'nullable|string|max:255',
             'prenom' => 'nullable|string|max:255',
-            'email' => ['required', 'email', Rule::unique('users')->ignore($user->id)],
+            'email' => $emailRules,
             'role' => 'required|in:ENSEIGNANT,AGENT_SCOLARITE,ADMINISTRATEUR',
             'telephone' => 'nullable|string|max:20',
         ]);

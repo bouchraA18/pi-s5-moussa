@@ -19,6 +19,8 @@ use App\Http\Controllers\PointageController;
 use App\Http\Controllers\MatiereController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\PushTokenController;
+use App\Http\Controllers\TeacherMatiereController;
 
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/register', [AuthController::class, 'register']);
@@ -37,6 +39,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Agent only routes (ideally with middleware)
     Route::get('/admin/stats', [PointageController::class, 'stats']);
     Route::get('/admin/pending', [PointageController::class, 'pending']);
+    Route::get('/admin/validated', [PointageController::class, 'validated']);
     Route::post('/admin/approve/{id}', [PointageController::class, 'approve']);
     Route::post('/admin/reject/{id}', [PointageController::class, 'reject']);
     
@@ -44,6 +47,16 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/notifications/{id}/read', [NotificationController::class, 'markAsRead']);
     Route::post('/notifications/read-all', [NotificationController::class, 'markAllAsRead']);
     Route::delete('/notifications/{id}', [NotificationController::class, 'destroy']);
+
+    Route::post('/push-token', [PushTokenController::class, 'store']);
+
+    // Teacher assignment / semester helpers
+    Route::get('/teacher/semesters', [TeacherMatiereController::class, 'mySemesters']);
+    Route::get('/teacher/matieres', [TeacherMatiereController::class, 'myMatieres']);
+
+    // Agent/Admin: assign matieres to teachers by semester
+    Route::get('/admin/teacher-semester-matieres', [TeacherMatiereController::class, 'getTeacherSemesterMatieres']);
+    Route::put('/admin/teacher-semester-matieres', [TeacherMatiereController::class, 'syncTeacherSemesterMatieres']);
     
     // Profile routes
     Route::put('/profile', [ProfileController::class, 'update']);
@@ -53,4 +66,3 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::apiResource('users', \App\Http\Controllers\UserController::class);
     Route::apiResource('matieres', \App\Http\Controllers\MatiereController::class);
 });
-

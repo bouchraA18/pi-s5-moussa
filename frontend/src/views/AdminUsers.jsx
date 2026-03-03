@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import api from '../services/api';
 import { motion, AnimatePresence } from 'framer-motion';
+import { normalizeSchoolEmail } from '../utils/email';
 
 const AdminUsers = () => {
     const [users, setUsers] = useState([]);
@@ -65,11 +66,20 @@ const AdminUsers = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        let normalizedEmail = '';
+        try {
+            normalizedEmail = normalizeSchoolEmail(formData.email);
+        } catch (err) {
+            alert(err?.message || 'Email invalide.');
+            return;
+        }
+
+        const payload = { ...formData, email: normalizedEmail };
         try {
             if (editingUser) {
-                await api.put(`/users/${editingUser.id}`, formData);
+                await api.put(`/users/${editingUser.id}`, payload);
             } else {
-                await api.post('/users', formData);
+                await api.post('/users', payload);
             }
             fetchUsers();
             closeModal();
@@ -232,7 +242,7 @@ const AdminUsers = () => {
                                             <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Email</label>
                                             <input
                                                 required
-                                                type="email"
+                                                type="text"
                                                 className="w-full p-3.5 bg-gray-50/50 border border-gray-200 rounded-xl focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all outline-none font-medium text-gray-800 placeholder-gray-400"
                                                 value={formData.email}
                                                 onChange={e => setFormData({ ...formData, email: e.target.value })}

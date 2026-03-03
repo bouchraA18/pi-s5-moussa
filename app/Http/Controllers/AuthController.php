@@ -11,12 +11,25 @@ class AuthController extends Controller
 {
     public function login(Request $request)
     {
+        $domain = (string) config('school.email_domain', 'supnum.mr');
+
         $request->validate([
-            'email' => 'required|email',
+            'email' => ['required', 'email'],
             'password' => 'required',
         ]);
 
-        $user = User::where('email', $request->email)->first();
+        $email = (string) $request->email;
+        $user = User::where('email', $email)->first();
+
+        $normalizedDomain = strtolower(trim($domain));
+        $endsWithDomain = str_ends_with(strtolower(trim($email)), '@' . $normalizedDomain);
+        if (!$endsWithDomain) {
+            if (!$user || $user->role !== 'ADMINISTRATEUR') {
+                throw ValidationException::withMessages([
+                    'email' => ["L'adresse email doit se terminer par @$normalizedDomain."],
+                ]);
+            }
+        }
 
         // Debug logging
         if (!$user) {
@@ -53,11 +66,12 @@ class AuthController extends Controller
 
     public function register(Request $request)
     {
+        $domain = (string) config('school.email_domain', 'supnum.mr');
         $request->validate([
             'name' => 'required|string|max:255',
             'nom' => 'nullable|string|max:255',
             'prenom' => 'nullable|string|max:255',
-            'email' => 'required|email|unique:users,email',
+            'email' => ['required', 'email', 'ends_with:@' . $domain, 'unique:users,email'],
             'telephone' => 'nullable|string|max:20',
             'password' => 'required|min:8|confirmed',
         ]);

@@ -26,4 +26,15 @@ class User extends Authenticatable
     {
         return $this->hasMany(Session::class, 'enseignant_id');
     }
+
+    public function matieres()
+    {
+        return $this->belongsToMany(Matiere::class, 'teacher_matieres', 'teacher_id', 'matiere_id')
+            ->withTimestamps();
+    }
+
+    public function expoPushTokens()
+    {
+        return $this->hasMany(ExpoPushToken::class);
+    }
 }

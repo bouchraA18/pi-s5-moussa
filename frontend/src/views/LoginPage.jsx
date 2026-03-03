@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { authService } from '../services/api';
-import { Lock, Mail, ArrowRight, Loader2, GraduationCap, CheckCircle2 } from 'lucide-react';
+import { Lock, Mail, ArrowRight, Loader2, CheckCircle2, GraduationCap } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { normalizeSchoolEmail, SCHOOL_EMAIL_DOMAIN } from '../utils/email';
 
 
 const LoginPage = () => {
@@ -17,8 +18,25 @@ const LoginPage = () => {
         setLoading(true);
         setError('');
 
+        let normalizedEmail = '';
         try {
-            const data = await authService.login(email, password);
+            normalizedEmail = normalizeSchoolEmail(email);
+        } catch (err) {
+            const data = err?.response?.data;
+            const firstValidationError = data?.errors
+                ? Object.values(data.errors)[0]?.[0]
+                : undefined;
+            if (firstValidationError || data?.message) {
+                setError(firstValidationError || data.message);
+                return;
+            }
+            setError(err?.message || 'Email invalide.');
+            setLoading(false);
+            return;
+        }
+
+        try {
+            const data = await authService.login(normalizedEmail, password);
             const user = data.user;
 
             if (user.role === 'ADMINISTRATEUR' || user.role === 'AGENT' || user.role === 'AGENT_SCOLARITE') {
@@ -27,7 +45,11 @@ const LoginPage = () => {
                 navigate('/teacher-dashboard'); // Teacher view
             }
         } catch (err) {
-            setError('Identifiants incorrects. Veuillez réessayer.');
+            if (!String(email || '').includes('@')) {
+                setError(`Saisissez l'adresse complète (avec @...) si votre email n'est pas @${SCHOOL_EMAIL_DOMAIN}.`);
+            } else {
+                setError('Identifiants incorrects. Veuillez réessayer.');
+            }
         } finally {
             setLoading(false);
         }
@@ -70,8 +92,13 @@ const LoginPage = () => {
                         transition={{ delay: 0.2 }}
                     >
                         <div className="flex items-center gap-3 mb-8">
-                            <div className="w-12 h-12 bg-white/10 backdrop-blur-md rounded-xl flex items-center justify-center border border-white/20">
-                                <GraduationCap size={28} className="text-white" />
+                            <div className="w-12 h-12 bg-white/90 backdrop-blur-md rounded-xl flex items-center justify-center border border-white/30 overflow-hidden">
+                                <img
+                                    src="/supnum-logo.png"
+                                    alt="SupNum"
+                                    className="w-9 h-9 object-contain"
+                                    draggable={false}
+                                />
                             </div>
                             <span className="text-3xl font-bold tracking-tight">ClassTrack</span>
                         </div>
@@ -117,8 +144,13 @@ const LoginPage = () => {
                     className="w-full max-w-lg bg-white p-10 md:p-14 rounded-[2.5rem] shadow-2xl border border-slate-100"
                 >
                     <div className="text-center mb-10">
-                        <div className="w-20 h-20 bg-primary-600 rounded-2xl flex items-center justify-center mx-auto mb-6 text-white shadow-lg shadow-primary-200">
-                            <GraduationCap size={40} />
+                        <div className="w-20 h-20 bg-white rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg border border-slate-200 overflow-hidden">
+                            <img
+                                src="/supnum-logo.png"
+                                alt="SupNum"
+                                className="w-14 h-14 object-contain"
+                                draggable={false}
+                            />
                         </div>
                         <h2 className="text-4xl font-extrabold text-slate-900 tracking-tight">ClassTrack</h2>
                         <p className="text-slate-500 mt-3 text-lg font-medium">Accédez à votre espace de gestion</p>
@@ -141,12 +173,12 @@ const LoginPage = () => {
                             <div className="relative group">
                                 <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary-500 transition-colors" size={20} />
                                 <input
-                                    type="email"
+                                    type="text"
                                     required
                                     value={email}
                                     onChange={(e) => setEmail(e.target.value)}
                                     className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 outline-none transition-all font-medium"
-                                    placeholder="vous@université.com"
+                                    placeholder="prenom.nom@supnum.mr"
                                 />
                             </div>
                         </div>

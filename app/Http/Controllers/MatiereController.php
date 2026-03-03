@@ -7,9 +7,18 @@ use Illuminate\Http\Request;
 
 class MatiereController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        return response()->json(Matiere::all());
+        $query = Matiere::query();
+
+        if ($request->filled('niveau')) {
+            $query->where('niveau', (string) $request->niveau);
+        }
+        if ($request->filled('semestre')) {
+            $query->where('semestre', (int) $request->semestre);
+        }
+
+        return response()->json($query->orderBy('code')->get());
     }
 
     public function store(Request $request)
