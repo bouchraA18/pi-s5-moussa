@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import api from '../services/api';
 import { motion, AnimatePresence } from 'framer-motion';
+import { ACADEMIC_LEVELS, getSemestresForNiveau, globalSemesterLabel } from '../utils/academics';
 
 const AdminMatieres = () => {
     const [matieres, setMatieres] = useState([]);
@@ -132,6 +133,8 @@ const AdminMatieres = () => {
         return matchesSearch && matchesLevel;
     });
 
+    const semestreOptions = getSemestresForNiveau(formData.niveau);
+
     // Stats
     const totalMatieres = safeMatieres.length;
     const creditsTotal = safeMatieres.reduce((acc, m) => acc + (m.credit || 0), 0);
@@ -243,15 +246,25 @@ const AdminMatieres = () => {
                                             <select
                                                 className="w-full p-3.5 bg-gray-50/50 border border-gray-200 rounded-xl focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all outline-none"
                                                 value={formData.niveau}
-                                                onChange={e => setFormData({ ...formData, niveau: e.target.value })}
+                                                onChange={e => {
+                                                    const niveau = e.target.value;
+                                                    const semestres = getSemestresForNiveau(niveau);
+                                                    setFormData({
+                                                        ...formData,
+                                                        niveau,
+                                                        semestre: semestres.includes(Number(formData.semestre))
+                                                            ? Number(formData.semestre)
+                                                            : (semestres[0] || 1),
+                                                    });
+                                                }}
                                             >
-                                                {['L1', 'L2', 'L3', 'M1', 'M2'].map(o => <option key={o} value={o}>{o}</option>)}
+                                                {ACADEMIC_LEVELS.map(o => <option key={o} value={o}>{o}</option>)}
                                             </select>
                                         </div>
                                         <div className="space-y-2">
                                             <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Semestre</label>
                                             <div className="flex gap-2">
-                                                {[1, 2].map(s => (
+                                                {semestreOptions.map(s => (
                                                     <button
                                                         key={s}
                                                         type="button"
@@ -261,7 +274,7 @@ const AdminMatieres = () => {
                                                             : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'
                                                             }`}
                                                     >
-                                                        S{s}
+                                                        {globalSemesterLabel(formData.niveau, s)}
                                                     </button>
                                                 ))}
                                             </div>
@@ -403,7 +416,7 @@ const AdminMatieres = () => {
                             </div>
 
                             <div className="flex bg-gray-100/80 p-1.5 rounded-xl">
-                                {['ALL', 'L1', 'L2', 'L3', 'M1', 'M2'].map((level) => (
+                                {['ALL', ...ACADEMIC_LEVELS].map((level) => (
                                     <button
                                         key={level}
                                         onClick={() => setSelectedLevel(level)}
@@ -467,7 +480,7 @@ const AdminMatieres = () => {
                                                             </span>
                                                             <div className="h-4 w-px bg-slate-200" />
                                                             <span className="font-bold text-slate-600 text-sm">
-                                                                Semestre {matiere.semestre}
+                                                                {globalSemesterLabel(matiere.niveau, matiere.semestre)}
                                                             </span>
                                                         </div>
                                                     </td>

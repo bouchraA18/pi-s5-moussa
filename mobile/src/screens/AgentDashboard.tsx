@@ -8,20 +8,30 @@ import {
   Check,
   CheckCircle2,
   Clock,
+  Download,
   FileSearch,
   Loader2,
   MoreHorizontal,
+  RotateCcw,
   Search,
   X,
 } from "lucide-react-native";
+import * as FileSystem from "expo-file-system/legacy";
+import * as Sharing from "expo-sharing";
 
 import AppLayout from "@/layouts/AppLayout";
 import api from "@/services/api";
 import CenteredModal from "@/ui/CenteredModal";
+import DateTimeField from "@/ui/DateTimeField";
 import SelectModalField from "@/ui/SelectModalField";
 import SpinningIcon from "@/ui/SpinningIcon";
 import { alert } from "@/ui/nativeAlert";
-import { buildSemestresByNiveau, globalSemesterLabel, normalizeNiveau } from "@/utils/academics";
+import {
+  YEAR_ORDER,
+  getSemestresForNiveau,
+  globalSemesterLabel,
+  normalizeNiveau,
+} from "@/utils/academics";
 
 type Pointage = {
   id: number | string;
@@ -58,12 +68,33 @@ type Matiere = {
   semestre: number;
 };
 
+function toNumber(v: unknown) {
+  const n = typeof v === "number" ? v : parseFloat(String(v ?? 0));
+  return Number.isFinite(n) ? n : 0;
+}
+
+function teachingHourWeight(typeSeance: unknown) {
+  const type = String(typeSeance || "");
+  if (type === "CM") return 1;
+  if (type === "TD" || type === "TP") return 2 / 3;
+  return 0;
+}
+
+function weightedTeachingHours(session: Pick<Pointage, "type_seance" | "duree">) {
+  return toNumber(session.duree) * teachingHourWeight(session.type_seance);
+}
+
+function formatCsvValue(value: unknown) {
+  return `"${String(value ?? "").replace(/"/g, '""')}"`;
+}
+
 export default function AgentDashboard() {
   const [activeTab, setActiveTab] = React.useState<"pending" | "validated">(
     "pending"
   );
   const [pointages, setPointages] = React.useState<Pointage[]>([]);
   const [loading, setLoading] = React.useState(true);
+  const [refreshingList, setRefreshingList] = React.useState(false);
   const [searchTerm, setSearchTerm] = React.useState("");
 
   const [dashboardStats, setDashboardStats] = React.useState<DashboardStats>({
@@ -98,6 +129,31 @@ export default function AgentDashboard() {
   const [assignSelectedIds, setAssignSelectedIds] = React.useState<string[]>(
     []
   );
+  const [reportTeacherId, setReportTeacherId] = React.useState("");
+  const [reportDateFrom, setReportDateFrom] = React.useState("");
+  const [reportDateTo, setReportDateTo] = React.useState("");
+  const [exporting, setExporting] = React.useState(false);
+  const pointagesRequestId = React.useRef(0);
+  const hasFetchedPointages = React.useRef(false);
+
+  const loadTeachers = React.useCallback(async () => {
+    try {
+      const usersRes = await api.get("/users");
+      const allUsers: Teacher[] = Array.isArray(usersRes.data)
+        ? usersRes.data
+        : Array.isArray((usersRes.data as any)?.data)
+          ? (usersRes.data as any).data
+          : [];
+      const nextTeachers = allUsers.filter((u) => u?.role === "ENSEIGNANT");
+      setTeachers(nextTeachers);
+      return nextTeachers;
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error("Error fetching teachers:", err);
+      setTeachers([]);
+      return [];
+    }
+  }, []);
 
   const fetchStats = React.useCallback(async () => {
     try {
@@ -110,24 +166,50 @@ export default function AgentDashboard() {
   }, []);
 
   const fetchPointages = React.useCallback(async () => {
-    setLoading(true);
+    const requestId = ++pointagesRequestId.current;
+    if (!hasFetchedPointages.current) setLoading(true);
+    else setRefreshingList(true);
     try {
       const endpoint =
         activeTab === "pending" ? "/admin/pending" : "/admin/validated";
-      const res = await api.get(endpoint);
+      const params =
+        activeTab === "validated"
+          ? {
+              teacher_id: reportTeacherId || undefined,
+              date_from: reportDateFrom || undefined,
+              date_to: reportDateTo || undefined,
+            }
+          : undefined;
+      const res = await api.get(endpoint, { params });
+      if (requestId !== pointagesRequestId.current) return;
       setPointages(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
+      if (requestId !== pointagesRequestId.current) return;
       // eslint-disable-next-line no-console
       console.error("Error fetching pointages:", err);
+      setPointages([]);
     } finally {
-      setLoading(false);
+      if (requestId === pointagesRequestId.current) {
+        hasFetchedPointages.current = true;
+        setLoading(false);
+        setRefreshingList(false);
+      }
     }
-  }, [activeTab]);
+  }, [activeTab, reportTeacherId, reportDateFrom, reportDateTo]);
+
+  React.useEffect(() => {
+    fetchStats();
+    loadTeachers();
+  }, [fetchStats, loadTeachers]);
 
   React.useEffect(() => {
     fetchPointages();
-    fetchStats();
-  }, [activeTab, fetchPointages, fetchStats]);
+  }, [fetchPointages]);
+
+  React.useEffect(() => {
+    setActiveRowId(null);
+    setSearchTerm("");
+  }, [activeTab]);
 
   const refreshAssignData = React.useCallback(
     async (teacherId: string, niveau: string, semestre: string) => {
@@ -166,29 +248,19 @@ export default function AgentDashboard() {
     setAssignModalOpen(true);
     setAssignLoading(true);
     try {
-      const [usersRes, matieresAllRes] = await Promise.all([
-        api.get("/users"),
-        api.get("/matieres"),
-      ]);
-
-      const allUsers: Teacher[] = Array.isArray(usersRes.data)
-        ? usersRes.data
-        : Array.isArray((usersRes.data as any)?.data)
-          ? (usersRes.data as any).data
-          : [];
-      const nextTeachers = allUsers.filter((u) => u?.role === "ENSEIGNANT");
+      const nextTeachers = teachers.length > 0 ? teachers : await loadTeachers();
       setTeachers(nextTeachers);
 
-      const matieresAll: Matiere[] = Array.isArray(matieresAllRes.data) ? matieresAllRes.data : [];
-      const { years, semestresByNiveau } = buildSemestresByNiveau(matieresAll);
+      const years = [...YEAR_ORDER];
+      const semestresByNiveau = Object.fromEntries(
+        years.map((niveau) => [niveau, getSemestresForNiveau(niveau)])
+      );
       setNiveaux(years);
       setAssignSemestresByNiveau(semestresByNiveau);
 
       const nextTeacherId = nextTeachers[0]?.id ? String(nextTeachers[0].id) : "";
       const nextNiveau = years[0] || "";
-      const nextSemestre = nextNiveau
-        ? String(semestresByNiveau[nextNiveau]?.[0] ?? 1)
-        : "1";
+      const nextSemestre = String(getSemestresForNiveau(nextNiveau)[0] ?? 1);
 
       setAssignTeacherId(nextTeacherId);
       setAssignNiveau(normalizeNiveau(nextNiveau));
@@ -201,7 +273,7 @@ export default function AgentDashboard() {
     } finally {
       setAssignLoading(false);
     }
-  }, [refreshAssignData]);
+  }, [loadTeachers, refreshAssignData, teachers]);
 
   const closeAssignModal = () => {
     setAssignModalOpen(false);
@@ -306,12 +378,89 @@ export default function AgentDashboard() {
     }
   };
 
+  const resetValidatedFilters = React.useCallback(() => {
+    setReportTeacherId("");
+    setReportDateFrom("");
+    setReportDateTo("");
+  }, []);
+
+  const exportValidatedSessionsCsv = React.useCallback(async () => {
+    const exportRows = pointages.filter((p) => {
+      const teacherName = String(p.teacher?.name || "").toLowerCase();
+      const matiereName = String(p.matiere?.nom || "").toLowerCase();
+      const s = searchTerm.toLowerCase();
+      return teacherName.includes(s) || matiereName.includes(s);
+    });
+    if (activeTab !== "validated" || exportRows.length === 0) return;
+    setExporting(true);
+    try {
+      const sharingAvailable = await Sharing.isAvailableAsync();
+      if (!sharingAvailable || !FileSystem.cacheDirectory) {
+        alert("Le partage de fichiers n'est pas disponible sur cet appareil.");
+        return;
+      }
+
+      const header = [
+        "Enseignant",
+        "Email",
+        "Matiere",
+        "Type",
+        "Date",
+        "Heure debut",
+        "Heure fin",
+        "Duree",
+        "Heures calculees",
+      ];
+      const rows = exportRows.map((session) => [
+        session.teacher?.name || "",
+        session.teacher?.email || "",
+        session.matiere?.nom || "",
+        session.type_seance || "",
+        session.date || "",
+        session.heure_debut || "",
+        session.heure_fin || "",
+        toNumber(session.duree).toFixed(1),
+        weightedTeachingHours(session).toFixed(1),
+      ]);
+
+      const csv = [header, ...rows]
+        .map((row) => row.map(formatCsvValue).join(","))
+        .join("\n");
+      const fileName = `sessions-validees-${reportDateFrom || "debut"}-${reportDateTo || "fin"}.csv`;
+      const fileUri = `${FileSystem.cacheDirectory}${fileName}`;
+
+      await FileSystem.writeAsStringAsync(fileUri, `\uFEFF${csv}`, {
+        encoding: FileSystem.EncodingType.UTF8,
+      });
+
+      await Sharing.shareAsync(fileUri, {
+        mimeType: "text/csv",
+        dialogTitle: "Exporter les séances validées",
+        UTI: "public.comma-separated-values-text",
+      });
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error("Error exporting CSV:", err);
+      alert("Erreur lors de l'export CSV.");
+    } finally {
+      setExporting(false);
+    }
+  }, [activeTab, pointages, reportDateFrom, reportDateTo, searchTerm]);
+
   const filteredPointages = pointages.filter((p) => {
     const teacherName = String(p.teacher?.name || "").toLowerCase();
     const matiereName = String(p.matiere?.nom || "").toLowerCase();
     const s = searchTerm.toLowerCase();
     return teacherName.includes(s) || matiereName.includes(s);
   });
+
+  const reportTeacherOptions = [
+    { label: "Tous les enseignants", value: "" },
+    ...teachers.map((teacher) => ({
+      label: teacher.name,
+      value: String(teacher.id),
+    })),
+  ];
 
   const stats = [
     {
@@ -333,12 +482,12 @@ export default function AgentDashboard() {
       trendColor: "text-emerald-600",
     },
     {
-      label: "Volume Horaire",
+      label: "Volume Horaire (30j)",
       value: `${dashboardStats.total_hours}h`,
       icon: Clock,
       color: "#3b82f6",
       bg: "bg-blue-500/10",
-      trend: "Stable",
+      trend: "30 derniers jours",
       trendColor: "text-slate-500",
     },
   ];
@@ -350,7 +499,7 @@ export default function AgentDashboard() {
   }));
 
   return (
-    <AppLayout title="Administration Scolarité">
+    <AppLayout title="Administration Scolarité" routeName="AgentDashboard">
       {/* Assignment Modal */}
       <CenteredModal
         visible={assignModalOpen}
@@ -705,9 +854,9 @@ export default function AgentDashboard() {
               })}
             </View>
 
-            <View className="relative">
-              <View className="absolute left-4 top-3.5">
-                <Search size={18} color="#94a3b8" />
+              <View className="relative">
+                <View className="absolute left-4 top-3.5">
+                  <Search size={18} color="#94a3b8" />
               </View>
               <TextInput
                 value={searchTerm}
@@ -715,8 +864,100 @@ export default function AgentDashboard() {
                 placeholder="Rechercher..."
                 placeholderTextColor="#94a3b8"
                 className="w-full pl-11 pr-4 py-3.5 bg-slate-50 rounded-2xl font-medium text-slate-900"
-              />
-            </View>
+                />
+              </View>
+
+              {refreshingList ? (
+                <View className="flex-row items-center gap-2">
+                  <SpinningIcon size={14} color="#64748b" />
+                  <Text className="text-xs font-semibold text-slate-500">
+                    Mise à jour des séances...
+                  </Text>
+                </View>
+              ) : null}
+
+            {activeTab === "validated" ? (
+              <View className="gap-4">
+                <SelectModalField
+                  label="Enseignant"
+                  value={reportTeacherId}
+                  options={reportTeacherOptions}
+                  onChange={setReportTeacherId}
+                  fieldClassName="bg-slate-50 border-slate-200"
+                  valueClassName="text-slate-900"
+                />
+
+                <View className="flex-row gap-3">
+                  <View className="flex-1">
+                    <DateTimeField
+                      label="Du"
+                      mode="date"
+                      value={reportDateFrom}
+                      onChange={setReportDateFrom}
+                      placeholder="Date de début"
+                      clearOnLongPress
+                      fieldClassName="bg-slate-50 border-slate-200"
+                      valueClassName="text-slate-900"
+                    />
+                  </View>
+                  <View className="flex-1">
+                    <DateTimeField
+                      label="Au"
+                      mode="date"
+                      value={reportDateTo}
+                      onChange={setReportDateTo}
+                      placeholder="Date de fin"
+                      clearOnLongPress
+                      fieldClassName="bg-slate-50 border-slate-200"
+                      valueClassName="text-slate-900"
+                    />
+                  </View>
+                </View>
+
+                <View className="flex-row items-center gap-3">
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={resetValidatedFilters}
+                    className="flex-1 py-3.5 px-4 bg-white border border-slate-200 rounded-xl flex-row items-center justify-center gap-2"
+                  >
+                    <RotateCcw size={16} color="#475569" />
+                    <Text className="text-slate-600 font-semibold">
+                      Réinitialiser
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={exportValidatedSessionsCsv}
+                    disabled={filteredPointages.length === 0 || exporting}
+                    className={[
+                      "flex-1 py-3.5 px-4 rounded-xl flex-row items-center justify-center gap-2",
+                      filteredPointages.length === 0 || exporting
+                        ? "bg-slate-200"
+                        : "bg-emerald-600 shadow-lg shadow-emerald-500/20",
+                    ].join(" ")}
+                  >
+                    <Download
+                      size={16}
+                      color={
+                        filteredPointages.length === 0 || exporting
+                          ? "#64748b"
+                          : "#ffffff"
+                      }
+                    />
+                    <Text
+                      className={[
+                        "font-semibold",
+                        filteredPointages.length === 0 || exporting
+                          ? "text-slate-500"
+                          : "text-white",
+                      ].join(" ")}
+                    >
+                      {exporting ? "Export..." : "Exporter CSV"}
+                    </Text>
+                  </Pressable>
+                </View>
+              </View>
+            ) : null}
           </View>
         </View>
 
@@ -742,7 +983,9 @@ export default function AgentDashboard() {
               <Text className="text-slate-500 text-center max-w-xs">
                 {searchTerm
                   ? "Aucun résultat ne correspond à votre recherche."
-                  : "Tout est à jour ! Aucune demande en attente pour le moment."}
+                  : activeTab === "validated"
+                    ? "Aucune séance approuvée ne correspond à ces filtres."
+                    : "Tout est à jour ! Aucune demande en attente pour le moment."}
               </Text>
             </View>
           ) : (

@@ -18,24 +18,29 @@ import {
     Plus,
     Filter,
     ChevronRight,
-    ArrowUpRight
+    ArrowUpRight,
+    Download,
+    RotateCcw
 } from 'lucide-react';
 import api from '../services/api';
 import { motion, AnimatePresence } from 'framer-motion';
+import { ACADEMIC_LEVELS, getSemestresForNiveau, globalSemesterLabel } from '../utils/academics';
 
-const globalSemesterLabel = (niveau, semestre) => {
-    const n = String(niveau || '');
-    const s = Number(semestre || 0);
-    const offsets = {
-        L1: 0,
-        L2: 2,
-        L3: 4,
-        M1: 0,
-        M2: 2,
-    };
-    const offset = offsets[n] ?? 0;
-    return `S${offset + s}`;
+const toNumber = (value) => {
+    const parsed = typeof value === 'number' ? value : parseFloat(String(value ?? 0));
+    return Number.isFinite(parsed) ? parsed : 0;
 };
+
+const teachingHourWeight = (typeSeance) => {
+    if (typeSeance === 'CM') return 1;
+    if (typeSeance === 'TD' || typeSeance === 'TP') return 2 / 3;
+    return 0;
+};
+
+const weightedTeachingHours = (session) =>
+    toNumber(session?.duree) * teachingHourWeight(String(session?.type_seance || ''));
+
+const formatCsvValue = (value) => `"${String(value ?? '').replace(/"/g, '""')}"`;
 
 const AgentDashboard = () => {
     const [activeTab, setActiveTab] = useState('pending');
@@ -52,11 +57,6 @@ const AgentDashboard = () => {
         distribution: [] // Not heavily used in this view but available
     });
 
-    useEffect(() => {
-        fetchPointages();
-        fetchStats();
-    }, [activeTab]);
-
     const [rejectionModal, setRejectionModal] = useState({ show: false, sessionId: null, reason: '' });
 
     // Assignments (Agent/Admin): assign matieres to teachers by semester
@@ -70,6 +70,37 @@ const AgentDashboard = () => {
     const [assignSemestre, setAssignSemestre] = useState(1);
     const [assignMatieres, setAssignMatieres] = useState([]);
     const [assignSelectedMatiereIds, setAssignSelectedMatiereIds] = useState([]);
+    const [reportTeacherId, setReportTeacherId] = useState('');
+    const [reportDateFrom, setReportDateFrom] = useState('');
+    const [reportDateTo, setReportDateTo] = useState('');
+    const [exporting, setExporting] = useState(false);
+
+    useEffect(() => {
+        loadTeachers();
+        fetchStats();
+    }, []);
+
+    useEffect(() => {
+        fetchPointages();
+    }, [activeTab, reportTeacherId, reportDateFrom, reportDateTo]);
+
+    const loadTeachers = async () => {
+        try {
+            const usersRes = await api.get('/users');
+            const allUsers = Array.isArray(usersRes.data)
+                ? usersRes.data
+                : Array.isArray(usersRes.data?.data)
+                    ? usersRes.data.data
+                    : [];
+            const nextTeachers = allUsers.filter((u) => u?.role === 'ENSEIGNANT');
+            setTeachers(nextTeachers);
+            return nextTeachers;
+        } catch (err) {
+            console.error("Error fetching teachers:", err);
+            setTeachers([]);
+            return [];
+        }
+    };
 
     const refreshAssignData = async (teacherId, niveau, semestre) => {
         if (!teacherId || !niveau || !semestre) {
@@ -104,27 +135,15 @@ const AgentDashboard = () => {
         setAssignModalOpen(true);
         setAssignLoading(true);
         try {
-            const [usersRes, matieresAllRes] = await Promise.all([
-                api.get('/users'),
-                api.get('/matieres')
-            ]);
-
-            const allUsers = Array.isArray(usersRes.data)
-                ? usersRes.data
-                : Array.isArray(usersRes.data?.data)
-                    ? usersRes.data.data
-                    : [];
-
-            const nextTeachers = allUsers.filter((u) => u?.role === 'ENSEIGNANT');
+            const nextTeachers = teachers.length > 0 ? teachers : await loadTeachers();
             setTeachers(nextTeachers);
 
-            const matieresAll = Array.isArray(matieresAllRes.data) ? matieresAllRes.data : [];
-            const niveaux = Array.from(new Set(matieresAll.map((m) => String(m.niveau || '')).filter(Boolean))).sort();
+            const niveaux = [...ACADEMIC_LEVELS];
             setAvailableNiveaux(niveaux);
 
             const nextTeacherId = nextTeachers[0]?.id ? String(nextTeachers[0].id) : '';
             const nextNiveau = niveaux[0] || '';
-            const nextSemestre = 1;
+            const nextSemestre = getSemestresForNiveau(nextNiveau)[0] || 1;
 
             setAssignTeacherId(nextTeacherId);
             setAssignNiveau(nextNiveau);
@@ -148,6 +167,14 @@ const AgentDashboard = () => {
         refreshAssignData(assignTeacherId, assignNiveau, assignSemestre);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [assignModalOpen, assignTeacherId, assignNiveau, assignSemestre]);
+
+    useEffect(() => {
+        if (!assignModalOpen) return;
+        const semestres = getSemestresForNiveau(assignNiveau);
+        if (semestres.length > 0 && !semestres.includes(Number(assignSemestre))) {
+            setAssignSemestre(semestres[0]);
+        }
+    }, [assignModalOpen, assignNiveau, assignSemestre]);
 
     const toggleAssignMatiere = (id) => {
         const sid = String(id);
@@ -191,7 +218,14 @@ const AgentDashboard = () => {
         setLoading(true);
         try {
             const endpoint = activeTab === 'pending' ? '/admin/pending' : '/admin/validated';
-            const res = await api.get(endpoint);
+            const params = activeTab === 'validated'
+                ? {
+                    teacher_id: reportTeacherId || undefined,
+                    date_from: reportDateFrom || undefined,
+                    date_to: reportDateTo || undefined,
+                }
+                : undefined;
+            const res = await api.get(endpoint, { params });
             setPointages(res.data);
         } catch (err) {
             console.error("Error fetching pointages:", err);
@@ -252,11 +286,63 @@ const AgentDashboard = () => {
         }
     };
 
+    const resetValidatedFilters = () => {
+        setReportTeacherId('');
+        setReportDateFrom('');
+        setReportDateTo('');
+    };
+
+    const exportValidatedSessionsCsv = async () => {
+        if (activeTab !== 'validated' || filteredPointages.length === 0) return;
+        setExporting(true);
+        try {
+            const header = [
+                'Enseignant',
+                'Email',
+                'Matiere',
+                'Type',
+                'Date',
+                'Heure debut',
+                'Heure fin',
+                'Duree',
+                'Heures calculees',
+            ];
+            const rows = filteredPointages.map((session) => ([
+                session.teacher?.name || '',
+                session.teacher?.email || '',
+                session.matiere?.nom || '',
+                session.type_seance || '',
+                session.date || '',
+                session.heure_debut || '',
+                session.heure_fin || '',
+                toNumber(session.duree).toFixed(1),
+                weightedTeachingHours(session).toFixed(1),
+            ]));
+            const csv = [header, ...rows]
+                .map((row) => row.map(formatCsvValue).join(','))
+                .join('\n');
+            const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' });
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            const from = reportDateFrom || 'debut';
+            const to = reportDateTo || 'fin';
+            link.href = url;
+            link.download = `sessions-validees-${from}-${to}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+        } finally {
+            setExporting(false);
+        }
+    };
+
     // Filtered pointages
-    const filteredPointages = pointages.filter(p =>
-        p.teacher?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        p.matiere?.nom.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    const filteredPointages = pointages.filter((p) => {
+        const search = searchTerm.toLowerCase();
+        return String(p.teacher?.name || '').toLowerCase().includes(search) ||
+            String(p.matiere?.nom || '').toLowerCase().includes(search);
+    });
 
     const stats = [
         {
@@ -282,17 +368,19 @@ const AgentDashboard = () => {
             trendColor: 'text-emerald-600'
         },
         {
-            label: 'Volume Horaire',
+            label: 'Volume Horaire (30j)',
             value: `${dashboardStats.total_hours}h`,
             icon: Clock,
             color: 'text-blue-500',
             bg: 'bg-blue-500/10',
             border: 'border-blue-500/20',
             desc: 'Cumul validé',
-            trend: 'Stable',
+            trend: '30 derniers jours',
             trendColor: 'text-slate-500'
         },
     ];
+
+    const assignSemestreOptions = getSemestresForNiveau(assignNiveau);
 
     return (
         <AppLayout title="Administration Scolarité">
@@ -385,9 +473,17 @@ const AgentDashboard = () => {
                                                 className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all text-slate-800 font-semibold"
                                                 value={String(assignSemestre)}
                                                 onChange={(e) => setAssignSemestre(Number(e.target.value))}
+                                                disabled={assignSemestreOptions.length === 0}
                                             >
-                                                <option value="1">{globalSemesterLabel(assignNiveau, 1)}</option>
-                                                <option value="2">{globalSemesterLabel(assignNiveau, 2)}</option>
+                                                {assignSemestreOptions.length === 0 ? (
+                                                    <option value="">Aucun semestre</option>
+                                                ) : (
+                                                    assignSemestreOptions.map((semestre) => (
+                                                        <option key={semestre} value={String(semestre)}>
+                                                            {globalSemesterLabel(assignNiveau, semestre)}
+                                                        </option>
+                                                    ))
+                                                )}
                                             </select>
                                         </div>
                                     </div>
@@ -641,6 +737,75 @@ const AgentDashboard = () => {
                                     />
                                 </div>
                             </div>
+                            {activeTab === 'validated' && (
+                                <div className="mt-4 flex flex-col xl:flex-row xl:items-end gap-4">
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 flex-1">
+                                        <div>
+                                            <label className="block text-xs font-black text-slate-700 uppercase tracking-wide mb-2">
+                                                Enseignant
+                                            </label>
+                                            <select
+                                                value={reportTeacherId}
+                                                onChange={(e) => setReportTeacherId(e.target.value)}
+                                                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all text-slate-800 font-semibold"
+                                            >
+                                                <option value="">Tous les enseignants</option>
+                                                {teachers.map((teacher) => (
+                                                    <option key={teacher.id} value={String(teacher.id)}>
+                                                        {teacher.name}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-black text-slate-700 uppercase tracking-wide mb-2">
+                                                Du
+                                            </label>
+                                            <input
+                                                type="date"
+                                                value={reportDateFrom}
+                                                onChange={(e) => setReportDateFrom(e.target.value)}
+                                                max={reportDateTo || undefined}
+                                                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all text-slate-800 font-semibold"
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-black text-slate-700 uppercase tracking-wide mb-2">
+                                                Au
+                                            </label>
+                                            <input
+                                                type="date"
+                                                value={reportDateTo}
+                                                onChange={(e) => setReportDateTo(e.target.value)}
+                                                min={reportDateFrom || undefined}
+                                                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all text-slate-800 font-semibold"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-3">
+                                        <button
+                                            onClick={resetValidatedFilters}
+                                            className="py-3 px-4 bg-white border border-slate-200 text-slate-600 font-semibold rounded-xl hover:bg-slate-50 hover:border-slate-300 transition-all inline-flex items-center gap-2"
+                                        >
+                                            <RotateCcw size={16} strokeWidth={2.5} />
+                                            Réinitialiser
+                                        </button>
+                                        <button
+                                            onClick={exportValidatedSessionsCsv}
+                                            disabled={filteredPointages.length === 0 || exporting}
+                                            className={[
+                                                "py-3 px-4 rounded-xl font-semibold inline-flex items-center gap-2 transition-all",
+                                                filteredPointages.length === 0 || exporting
+                                                    ? "bg-slate-200 text-slate-500 cursor-not-allowed"
+                                                    : "bg-emerald-600 text-white hover:bg-emerald-700 shadow-lg shadow-emerald-500/20",
+                                            ].join(' ')}
+                                        >
+                                            <Download size={16} strokeWidth={2.5} />
+                                            {exporting ? 'Export...' : 'Exporter CSV'}
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
                         {/* Content */}
@@ -657,7 +822,11 @@ const AgentDashboard = () => {
                                     </div>
                                     <h3 className="text-xl font-bold text-slate-900 mb-2">Aucune demande trouvée</h3>
                                     <p className="text-slate-500 max-w-xs mx-auto">
-                                        {searchTerm ? "Aucun résultat ne correspond à votre recherche." : "Tout est à jour ! Aucune demande en attente pour le moment."}
+                                        {searchTerm
+                                            ? "Aucun résultat ne correspond à votre recherche."
+                                            : activeTab === 'validated'
+                                                ? "Aucune séance approuvée ne correspond à ces filtres."
+                                                : "Tout est à jour ! Aucune demande en attente pour le moment."}
                                     </p>
                                 </div>
                             ) : (

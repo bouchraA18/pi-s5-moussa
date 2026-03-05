@@ -9,7 +9,6 @@ use App\Notifications\SessionStatusUpdated;
 use App\Services\ExpoPushService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Notification;
 use Illuminate\Validation\Rule;
 
@@ -183,10 +182,15 @@ class PointageController extends Controller
         return response()->json($sessions);
     }
 
-    public function validated()
+    public function validated(Request $request)
     {
-        $sessions = Session::with(['teacher', 'matiere'])
-            ->whereIn('statut', ['APPROUVE', 'REJETE'])
+        $request->validate([
+            'teacher_id' => 'nullable|integer|exists:users,id',
+            'date_from' => 'nullable|date',
+            'date_to' => 'nullable|date|after_or_equal:date_from',
+        ]);
+
+        $sessions = $this->approvedSessionsQuery($request)
             ->orderBy('date', 'desc')
             ->get();
 
@@ -254,6 +258,8 @@ class PointageController extends Controller
 
     public function stats()
     {
+        $rollingStart = now()->subDays(30)->startOfDay();
+
         $pendingCount = Session::where('statut', 'EN_ATTENTE')->count();
         $validatedCount = Session::where('statut', 'APPROUVE')->count(); // Total validated
         
@@ -263,22 +269,34 @@ class PointageController extends Controller
             ->whereYear('date', now()->year)
             ->count();
 
-        $totalHours = Session::where('statut', 'APPROUVE')->sum('duree');
+        $approvedSessions = Session::where('statut', 'APPROUVE')
+            ->whereDate('date', '>=', $rollingStart->toDateString())
+            ->get(['type_seance', 'duree']);
+
+        $totalHours = $approvedSessions->sum(
+            fn (Session $session) => Session::weightedTeachingHours($session->type_seance, $session->duree)
+        );
 
         $activeTeachers = Session::distinct('enseignant_id')->count('enseignant_id');
 
-        // Distribution by type (CM, TD, TP) based on hours
-        $distribution = Session::where('statut', 'APPROUVE')
-            ->select('type_seance as label', DB::raw('sum(duree) as total_hours'))
+        $distribution = $approvedSessions
             ->groupBy('type_seance')
-            ->get();
-            
-        // Calculate percentages
-        $distData = $distribution->map(function($item) use ($totalHours) {
+            ->map(function ($sessions, $label) {
+                return [
+                    'label' => $label,
+                    'weighted_hours' => $sessions->sum(
+                        fn (Session $session) => Session::weightedTeachingHours($session->type_seance, $session->duree)
+                    ),
+                ];
+            })
+            ->values();
+
+        // Calculate percentages from weighted hours so totals stay coherent.
+        $distData = $distribution->map(function ($item) use ($totalHours) {
             return [
-                'label' => $item->label,
-                'val' => $totalHours > 0 ? round(($item->total_hours / $totalHours) * 100) : 0,
-                'color' => match($item->label) {
+                'label' => $item['label'],
+                'val' => $totalHours > 0 ? round(($item['weighted_hours'] / $totalHours) * 100) : 0,
+                'color' => match($item['label']) {
                     'CM' => 'bg-purple-500',
                     'TD' => 'bg-orange-500', 
                     'TP' => 'bg-pink-500',
@@ -295,5 +313,25 @@ class PointageController extends Controller
             'active_teachers' => $activeTeachers,
             'distribution' => $distData
         ]);
+    }
+
+    private function approvedSessionsQuery(Request $request)
+    {
+        $query = Session::with(['teacher', 'matiere'])
+            ->where('statut', 'APPROUVE');
+
+        if ($request->filled('teacher_id')) {
+            $query->where('enseignant_id', (int) $request->teacher_id);
+        }
+
+        if ($request->filled('date_from')) {
+            $query->whereDate('date', '>=', $request->date_from);
+        }
+
+        if ($request->filled('date_to')) {
+            $query->whereDate('date', '<=', $request->date_to);
+        }
+
+        return $query;
     }
 }

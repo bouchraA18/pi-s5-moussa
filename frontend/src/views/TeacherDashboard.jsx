@@ -57,6 +57,28 @@ const globalSemesterNumber = (niveau, semestre) => {
 
 const globalSemesterLabel = (niveau, semestre) => `S${globalSemesterNumber(niveau, semestre)}`;
 
+const toNumber = (value) => {
+    const parsed = typeof value === 'number' ? value : parseFloat(String(value ?? 0));
+    return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const teachingHourWeight = (typeSeance) => {
+    if (typeSeance === 'CM') return 1;
+    if (typeSeance === 'TD' || typeSeance === 'TP') return 2 / 3;
+    return 0;
+};
+
+const weightedTeachingHours = (session) =>
+    toNumber(session?.duree) * teachingHourWeight(String(session?.type_seance || ''));
+
+const roundHours = (value) => Math.round(value * 10) / 10;
+
+const isWithinLast30Days = (dateValue) => {
+    const date = new Date(dateValue);
+    if (Number.isNaN(date.getTime())) return false;
+    return date.getTime() >= (Date.now() - (30 * 24 * 60 * 60 * 1000));
+};
+
 const TeacherDashboard = () => {
     const [sessions, setSessions] = useState([]);
     const [matieres, setMatieres] = useState([]);
@@ -123,7 +145,11 @@ const TeacherDashboard = () => {
             setSelectedSemestre(initialSemestre);
 
             const visibleMatieres = initialYear
-                ? assignedMatieres.filter((m) => String(m.niveau || '') === initialYear && Number(m.semestre || 0) === Number(initialSemestre))
+                ? assignedMatieres.filter(
+                    (m) =>
+                        String(m.niveau || '') === initialYear &&
+                        Number(m.semestre || 0) === Number(initialSemestre)
+                )
                 : [];
             setMatieres(visibleMatieres);
 
@@ -239,13 +265,13 @@ const TeacherDashboard = () => {
 
 
     // Calculate stats
-    const totalHours = sessions
-        .filter(s => s.statut === 'APPROUVE')
-        .reduce((acc, s) => acc + parseFloat(s.duree || 0), 0);
+    const totalHours = roundHours(sessions
+        .filter(s => s.statut === 'APPROUVE' && isWithinLast30Days(s.date))
+        .reduce((acc, s) => acc + weightedTeachingHours(s), 0));
 
     const pendingHours = sessions
         .filter(s => s.statut === 'EN_ATTENTE')
-        .reduce((acc, s) => acc + parseFloat(s.duree || 0), 0);
+        .reduce((acc, s) => acc + toNumber(s.duree), 0);
 
     const timeSlotOptions = TIME_SLOTS.map((s) => ({
         label: `${s.start} - ${s.end}`,
@@ -335,7 +361,7 @@ const TeacherDashboard = () => {
                         <Clock size={24} />
                     </div>
                     <div>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Total Heures Effectuées</p>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Total équivalent CM (30j)</p>
                         <p className="text-2xl font-black text-slate-900 tracking-tight">{totalHours} h</p>
                     </div>
                 </motion.div>

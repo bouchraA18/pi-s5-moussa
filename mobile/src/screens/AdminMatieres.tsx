@@ -21,6 +21,7 @@ import CenteredModal from "@/ui/CenteredModal";
 import SelectModalField from "@/ui/SelectModalField";
 import SpinningIcon from "@/ui/SpinningIcon";
 import { alert, confirm } from "@/ui/nativeAlert";
+import { getSemestresForNiveau, globalSemesterLabel } from "@/utils/academics";
 
 type Matiere = {
   id: number | string;
@@ -221,9 +222,10 @@ export default function AdminMatieres() {
 
   const canSubmitModal =
     formData.code.trim().length > 0 && formData.nom.trim().length > 0;
+  const semestreOptions = getSemestresForNiveau(formData.niveau);
 
   return (
-    <AppLayout title="Gestion des Matières">
+    <AppLayout title="Gestion des Matières" routeName="AdminMatieres">
       <View className="w-full max-w-[1100px] self-center">
         <CenteredModal
           visible={isModalOpen}
@@ -285,7 +287,18 @@ export default function AdminMatieres() {
                   <SelectModalField
                     label="Niveau d'étude"
                     value={formData.niveau}
-                    onChange={(v) => setFormData((p) => ({ ...p, niveau: v }))}
+                    onChange={(v) =>
+                      setFormData((p) => {
+                        const semestres = getSemestresForNiveau(v);
+                        return {
+                          ...p,
+                          niveau: v,
+                          semestre: semestres.includes(Number(p.semestre))
+                            ? Number(p.semestre)
+                            : (semestres[0] ?? 1),
+                        };
+                      })
+                    }
                     options={["L1", "L2", "L3", "M1", "M2"].map((o) => ({
                       value: o,
                       label: o,
@@ -302,7 +315,7 @@ export default function AdminMatieres() {
                     Semestre
                   </Text>
                   <View className="flex-row gap-2">
-                    {[1, 2].map((s) => {
+                    {semestreOptions.map((s) => {
                       const isActive = formData.semestre === s;
                       return (
                         <Pressable
@@ -324,7 +337,7 @@ export default function AdminMatieres() {
                               isActive ? "text-white" : "text-gray-500",
                             ].join(" ")}
                           >
-                            S{s}
+                            {globalSemesterLabel(formData.niveau, s)}
                           </Text>
                         </Pressable>
                       );
@@ -628,7 +641,7 @@ export default function AdminMatieres() {
                               </View>
                               <View className="h-4 w-px bg-slate-200" />
                               <Text className="font-bold text-slate-600 text-sm">
-                                Semestre {m.semestre}
+                                {globalSemesterLabel(m.niveau, m.semestre)}
                               </Text>
                             </View>
                           </View>

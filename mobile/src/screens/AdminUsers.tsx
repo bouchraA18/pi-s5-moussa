@@ -233,7 +233,7 @@ export default function AdminUsers() {
     (editingUser ? true : formData.password.trim().length > 0);
 
   return (
-    <AppLayout title="Gestion des Utilisateurs">
+    <AppLayout title="Gestion des Utilisateurs" routeName="AdminUsers">
       <View className="w-full max-w-[1100px] self-center">
         <CenteredModal
           visible={isModalOpen}

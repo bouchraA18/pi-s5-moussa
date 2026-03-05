@@ -1,5 +1,13 @@
 export const YEAR_ORDER = ["L1", "L2", "L3", "M1", "M2"] as const;
 
+export const SEMESTRES_BY_NIVEAU: Record<string, number[]> = {
+  L1: [1, 2],
+  L2: [1, 2],
+  L3: [1, 2],
+  M1: [1, 2],
+  M2: [1, 2],
+};
+
 export function normalizeNiveau(niveau: unknown) {
   return String(niveau ?? "")
     .trim()
@@ -19,6 +27,11 @@ export function sortNiveau(a: string, b: string) {
   const ib = niveauOrderIndex(nb);
   if (ia !== ib) return ia - ib;
   return na.localeCompare(nb);
+}
+
+export function getSemestresForNiveau(niveau: unknown) {
+  const n = normalizeNiveau(niveau);
+  return SEMESTRES_BY_NIVEAU[n] || [];
 }
 
 export function globalSemesterNumber(niveau: unknown, semestre: unknown) {
@@ -62,4 +75,3 @@ export function buildSemestresByNiveau<T extends { niveau?: any; semestre?: any 
 
   return { years, semestresByNiveau };
 }
-
