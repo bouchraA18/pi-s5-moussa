@@ -4,7 +4,6 @@ import { LogOut, User, Bell, Clock, Check, History, MessageSquare, Trash2 } from
 import api, { authService } from '../services/api';
 import { motion, AnimatePresence } from 'framer-motion';
 
-<<<<<<< HEAD
 const AppLayout = ({ children, title, navbarContent }) => {
     const navigate = useNavigate();
     const user = authService.getCurrentUser();

@@ -13,7 +13,7 @@ export function normalizeSchoolEmail(input) {
   }
 
   if (!raw.includes("@")) {
-    throw new Error("Saisissez l'adresse email complÃ¨te (avec @...).");
+    throw new Error("Saisissez l'adresse email complète (avec @...).");
   }
 
   return raw;

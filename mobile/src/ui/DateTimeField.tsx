@@ -112,51 +112,53 @@ export default function DateTimeField({
         <Icon size={16} color="#94a3b8" />
       </Pressable>
 
-      <CenteredModal visible={open} onClose={() => setOpen(false)}>
-        <View className="p-6 gap-4">
-          <Text className="text-sm font-black text-slate-800 uppercase tracking-[0.2em]">
-            {label}
-          </Text>
-          <View className="rounded-2xl overflow-hidden bg-white">
-            <DateTimePicker
-              value={temp}
-              mode={mode}
-              display={Platform.OS === "ios" ? "spinner" : "default"}
-              is24Hour
-              {...(Platform.OS === "ios"
-                ? ({
-                    themeVariant: "light",
-                    textColor: "#0f172a",
-                    style: { backgroundColor: "#ffffff" },
-                  } as const)
-                : {})}
-              onChange={(_, selected) => {
-                if (!selected) return;
-                setTemp(selected);
-                if (Platform.OS !== "ios") {
-                  commit(selected);
-                  setOpen(false);
-                }
-              }}
-            />
-          </View>
+      {open ? (
+        <CenteredModal visible={open} onClose={() => setOpen(false)}>
+          <View className="p-6 gap-4">
+            <Text className="text-sm font-black text-slate-800 uppercase tracking-[0.2em]">
+              {label}
+            </Text>
+            <View className="rounded-2xl overflow-hidden bg-white">
+              <DateTimePicker
+                value={temp}
+                mode={mode}
+                display={Platform.OS === "ios" ? "spinner" : "default"}
+                is24Hour
+                {...(Platform.OS === "ios"
+                  ? ({
+                      themeVariant: "light",
+                      textColor: "#0f172a",
+                      style: { backgroundColor: "#ffffff" },
+                    } as const)
+                  : {})}
+                onChange={(_, selected) => {
+                  if (!selected) return;
+                  setTemp(selected);
+                  if (Platform.OS !== "ios") {
+                    commit(selected);
+                    setOpen(false);
+                  }
+                }}
+              />
+            </View>
 
-          {Platform.OS === "ios" ? (
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => {
-                commit(temp);
-                setOpen(false);
-              }}
-              className="w-full py-4 bg-primary-600 rounded-xl items-center justify-center active:scale-[0.98]"
-            >
-              <Text className="text-white font-black text-sm uppercase tracking-widest">
-                Confirmer
-              </Text>
-            </Pressable>
-          ) : null}
-        </View>
-      </CenteredModal>
+            {Platform.OS === "ios" ? (
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => {
+                  commit(temp);
+                  setOpen(false);
+                }}
+                className="w-full py-4 bg-primary-600 rounded-xl items-center justify-center active:scale-[0.98]"
+              >
+                <Text className="text-white font-black text-sm uppercase tracking-widest">
+                  Confirmer
+                </Text>
+              </Pressable>
+            ) : null}
+          </View>
+        </CenteredModal>
+      ) : null}
     </View>
   );
 }

@@ -1,11 +1,18 @@
 import React, { useEffect, useRef } from "react";
 import { Animated, Easing, View } from "react-native";
+import { Loader2 } from "lucide-react-native";
 
 type Props = {
-  children: React.ReactNode;
+  children?: React.ReactNode;
+  color?: string;
+  size?: number;
 };
 
-export default function SpinningIcon({ children }: Props) {
+export default function SpinningIcon({
+  children,
+  color = "#64748b",
+  size = 18,
+}: Props) {
   const rotate = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -28,8 +35,7 @@ export default function SpinningIcon({ children }: Props) {
 
   return (
     <Animated.View style={{ transform: [{ rotate: spin }] }}>
-      <View>{children}</View>
+      <View>{children ?? <Loader2 size={size} color={color} />}</View>
     </Animated.View>
   );
 }
-

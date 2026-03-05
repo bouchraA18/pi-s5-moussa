@@ -9,8 +9,6 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { useNavigation } from "@react-navigation/native";
-import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import {
   ArrowRight,
   Loader2,
@@ -19,16 +17,14 @@ import {
 } from "lucide-react-native";
 
 import type { RootStackParamList } from "@/navigation/types";
+import { navigate } from "@/navigation/navigationRef";
 import { authService } from "@/services/api";
 import SpinningIcon from "@/ui/SpinningIcon";
 import { normalizeSchoolEmail, SCHOOL_EMAIL_DOMAIN } from "@/utils/email";
 
-type Navigation = NativeStackNavigationProp<RootStackParamList>;
-
 const SUPNUM_LOGO = require("../../assets/images/supnum-logo.png");
 
 export default function LoginPage() {
-  const navigation = useNavigation<Navigation>();
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [error, setError] = React.useState("");
@@ -58,9 +54,9 @@ export default function LoginPage() {
         user.role === "AGENT" ||
         user.role === "AGENT_SCOLARITE"
       ) {
-        navigation.navigate("AgentDashboard");
+        navigate("AgentDashboard");
       } else {
-        navigation.navigate("TeacherDashboard");
+        navigate("TeacherDashboard");
       }
     } catch (err: any) {
       if (!err?.response) {
@@ -216,7 +212,7 @@ export default function LoginPage() {
                 Pas encore de compte ?{" "}
                 <Text
                   className="text-primary-600 font-semibold"
-                  onPress={() => navigation.navigate("Register")}
+                  onPress={() => navigate("Register")}
                 >
                   S'inscrire
                 </Text>

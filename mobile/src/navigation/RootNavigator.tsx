@@ -1,5 +1,6 @@
 import React from "react";
-import { createNativeStackNavigator } from "@react-navigation/native-stack";
+
+import { useCurrentRoute } from "@/navigation/navigationRef";
 import type { RootStackParamList } from "@/navigation/types";
 
 import LoginPage from "@/screens/LoginPage";
@@ -10,27 +11,19 @@ import ProfilePage from "@/screens/ProfilePage";
 import AdminUsers from "@/screens/AdminUsers";
 import AdminMatieres from "@/screens/AdminMatieres";
 
-const Stack = createNativeStackNavigator<RootStackParamList>();
+const screens: Record<keyof RootStackParamList, React.ComponentType> = {
+  Login: LoginPage,
+  Register: RegisterPage,
+  TeacherDashboard,
+  AgentDashboard,
+  Profile: ProfilePage,
+  AdminUsers,
+  AdminMatieres,
+};
 
 export default function RootNavigator() {
-  return (
-    <Stack.Navigator
-      initialRouteName="Login"
-      screenOptions={{
-        headerShown: false,
-        animation: "fade",
-      }}
-    >
-      <Stack.Screen name="Login" component={LoginPage} />
-      <Stack.Screen name="Register" component={RegisterPage} />
+  const routeName = useCurrentRoute();
+  const Screen = screens[routeName] || LoginPage;
 
-      <Stack.Screen name="TeacherDashboard" component={TeacherDashboard} />
-      <Stack.Screen name="AgentDashboard" component={AgentDashboard} />
-      <Stack.Screen name="Profile" component={ProfilePage} />
-
-      <Stack.Screen name="AdminUsers" component={AdminUsers} />
-      <Stack.Screen name="AdminMatieres" component={AdminMatieres} />
-    </Stack.Navigator>
-  );
+  return <Screen />;
 }
-

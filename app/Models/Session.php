@@ -9,6 +9,12 @@ class Session extends Model
 {
     use HasFactory;
 
+    public const TEACHING_HOUR_COEFFICIENTS = [
+        'CM' => 1.0,
+        'TD' => 2 / 3,
+        'TP' => 2 / 3,
+    ];
+
     protected $fillable = [
         'date',
         'heure_debut',
@@ -36,5 +42,15 @@ class Session extends Model
     public function anneeScolaire()
     {
         return $this->belongsTo(AnneeScolaire::class);
+    }
+
+    public static function teachingHourCoefficient(?string $typeSeance): float
+    {
+        return self::TEACHING_HOUR_COEFFICIENTS[$typeSeance ?? ''] ?? 0.0;
+    }
+
+    public static function weightedTeachingHours(?string $typeSeance, $duration): float
+    {
+        return ((float) $duration) * self::teachingHourCoefficient($typeSeance);
     }
 }

@@ -10,8 +10,6 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { BlurView } from "expo-blur";
-import { useNavigation, useNavigationState } from "@react-navigation/native";
-import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import {
   Bell,
   Check,
@@ -30,6 +28,7 @@ import {
   presentLocalNotification,
   registerAndSyncExpoPushToken,
 } from "@/services/pushNotifications";
+import { navigate } from "@/navigation/navigationRef";
 
 const SUPNUM_LOGO = require("../../assets/images/supnum-logo.png");
 
@@ -38,9 +37,8 @@ type Props = {
   children: React.ReactNode;
   scrollRef?: React.RefObject<ScrollView | null>;
   headerContent?: React.ReactNode;
+  routeName?: keyof RootStackParamList;
 };
-
-type Navigation = NativeStackNavigationProp<RootStackParamList>;
 
 type Notification = {
   id: number | string;
@@ -49,14 +47,17 @@ type Notification = {
   data?: Record<string, any>;
 };
 
-export default function AppLayout({ title, children, scrollRef, headerContent }: Props) {
-  const navigation = useNavigation<Navigation>();
+export default function AppLayout({
+  title,
+  children,
+  scrollRef,
+  headerContent,
+  routeName,
+}: Props) {
   const { width } = useWindowDimensions();
   const showSm = width >= 640;
   const showMd = width >= 768;
-  const currentRouteName = useNavigationState(
-    (state) => state.routes[state.index]?.name
-  );
+  const currentRouteName = routeName;
 
   const [user, setUser] = React.useState<any>(null);
   const [notifications, setNotifications] = React.useState<Notification[]>([]);
@@ -169,19 +170,19 @@ export default function AppLayout({ title, children, scrollRef, headerContent }:
 
   const handleHome = () => {
     if (!user) {
-      navigation.navigate("Login");
+      navigate("Login");
       return;
     }
     if (user.role === "ENSEIGNANT") {
-      navigation.navigate("TeacherDashboard");
+      navigate("TeacherDashboard");
       return;
     }
-    navigation.navigate("AgentDashboard");
+    navigate("AgentDashboard");
   };
 
   const handleLogout = async () => {
     await authService.logout();
-    navigation.navigate("Login");
+    navigate("Login");
   };
 
   return (
@@ -220,7 +221,7 @@ export default function AppLayout({ title, children, scrollRef, headerContent }:
                   <Pressable
                     key={item.route}
                     accessibilityRole="button"
-                    onPress={() => navigation.navigate(item.route)}
+                    onPress={() => navigate(item.route)}
                     className={[
                       "px-4 py-2 rounded-lg",
                       isActive ? "bg-primary-50" : "bg-transparent",
@@ -289,7 +290,7 @@ export default function AppLayout({ title, children, scrollRef, headerContent }:
 
             <Pressable
               accessibilityRole="button"
-              onPress={() => navigation.navigate("Profile")}
+              onPress={() => navigate("Profile")}
               className="p-2 rounded-full"
             >
               <UserIcon size={20} color="#94a3b8" />
@@ -465,7 +466,7 @@ export default function AppLayout({ title, children, scrollRef, headerContent }:
                 accessibilityRole="button"
                 onPress={() => {
                   setShowNavMenu(false);
-                  navigation.navigate(item.route);
+                  navigate(item.route);
                 }}
                 className={[
                   "px-4 py-3 rounded-xl border",

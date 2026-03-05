@@ -161,7 +161,7 @@ export default function ProfilePage() {
     !passwordLoading;
 
   return (
-    <AppLayout title="Mon Profil">
+    <AppLayout title="Mon Profil" routeName="Profile">
       <View className="w-full max-w-[900px] self-center">
         <View className="mb-8">
           <Text className="text-4xl font-black text-slate-900 mb-2">

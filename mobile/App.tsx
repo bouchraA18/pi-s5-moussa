@@ -2,25 +2,24 @@ import "./global.css";
 import "react-native-gesture-handler";
 import React from "react";
 import { StatusBar } from "expo-status-bar";
-import { NavigationContainer } from "@react-navigation/native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import RootNavigator from "@/navigation/RootNavigator";
-import linking from "@/navigation/linking";
+import { navigationRef } from "@/navigation/navigationRef";
 import * as Notifications from "expo-notifications";
 
 import { authService } from "@/services/api";
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
-    shouldShowAlert: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
     shouldPlaySound: true,
     shouldSetBadge: true,
   }),
 });
 
 export default function App() {
-  const navRef = React.useRef<any>(null);
-
   React.useEffect(() => {
     const sub = Notifications.addNotificationResponseReceivedListener(
       async (response) => {
@@ -29,20 +28,20 @@ export default function App() {
 
         const user = await authService.getCurrentUser();
         if (!user) {
-          navRef.current?.navigate?.("Login");
+          navigationRef.navigate("Login");
           return;
         }
 
         if (type === "new_session") {
-          navRef.current?.navigate?.("AgentDashboard");
+          navigationRef.navigate("AgentDashboard");
           return;
         }
         if (type === "status_update") {
-          navRef.current?.navigate?.("TeacherDashboard");
+          navigationRef.navigate("TeacherDashboard");
           return;
         }
 
-        navRef.current?.navigate?.(
+        navigationRef.navigate(
           user.role === "ENSEIGNANT" ? "TeacherDashboard" : "AgentDashboard"
         );
       }
@@ -52,11 +51,11 @@ export default function App() {
   }, []);
 
   return (
-    <SafeAreaProvider>
-      <NavigationContainer ref={navRef} linking={linking}>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
         <StatusBar style="dark" />
         <RootNavigator />
-      </NavigationContainer>
-    </SafeAreaProvider>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }

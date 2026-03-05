@@ -10,8 +10,6 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { useNavigation } from "@react-navigation/native";
-import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import {
   ArrowRight,
   Loader2,
@@ -21,12 +19,10 @@ import {
   User,
 } from "lucide-react-native";
 
-import type { RootStackParamList } from "@/navigation/types";
+import { navigate } from "@/navigation/navigationRef";
 import api from "@/services/api";
 import SpinningIcon from "@/ui/SpinningIcon";
 import { normalizeSchoolEmail } from "@/utils/email";
-
-type Navigation = NativeStackNavigationProp<RootStackParamList>;
 
 type FormData = {
   name: string;
@@ -41,7 +37,6 @@ type FormData = {
 const SUPNUM_LOGO = require("../../assets/images/supnum-logo.png");
 
 export default function RegisterPage() {
-  const navigation = useNavigation<Navigation>();
   const [formData, setFormData] = React.useState<FormData>({
     name: "",
     nom: "",
@@ -80,7 +75,7 @@ export default function RegisterPage() {
       });
       await AsyncStorage.setItem("token", String(response.data.token));
       await AsyncStorage.setItem("user", JSON.stringify(response.data.user));
-      navigation.navigate("TeacherDashboard");
+      navigate("TeacherDashboard");
     } catch (err: any) {
       const data = err?.response?.data;
       // Laravel validation errors come in data.errors (object of field => [msgs])
@@ -355,7 +350,7 @@ export default function RegisterPage() {
                 Vous avez déjà un compte ?{" "}
                 <Text
                   className="text-primary-600 font-semibold"
-                  onPress={() => navigation.navigate("Login")}
+                  onPress={() => navigate("Login")}
                 >
                   Se connecter
                 </Text>

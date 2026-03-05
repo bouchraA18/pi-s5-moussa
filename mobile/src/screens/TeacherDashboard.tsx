@@ -24,7 +24,6 @@ import {
   normalizeNiveau,
   sortNiveau,
 } from "@/utils/academics";
-import { useFocusEffect } from "@react-navigation/native";
 
 type Matiere = {
   id: number | string;
@@ -70,6 +69,27 @@ function timeSlotValue(start: string, end: string) {
 function toNumber(v: unknown) {
   const n = typeof v === "number" ? v : parseFloat(String(v ?? 0));
   return Number.isFinite(n) ? n : 0;
+}
+
+function teachingHourWeight(typeSeance: unknown) {
+  const type = String(typeSeance || "");
+  if (type === "CM") return 1;
+  if (type === "TD" || type === "TP") return 2 / 3;
+  return 0;
+}
+
+function weightedTeachingHours(session: Pick<Session, "type_seance" | "duree">) {
+  return toNumber(session.duree) * teachingHourWeight(session.type_seance);
+}
+
+function roundHours(v: number) {
+  return Math.round(v * 10) / 10;
+}
+
+function isWithinLast30Days(dateValue: unknown) {
+  const date = new Date(String(dateValue || ""));
+  if (Number.isNaN(date.getTime())) return false;
+  return date.getTime() >= Date.now() - 30 * 24 * 60 * 60 * 1000;
 }
 
 export default function TeacherDashboard() {
@@ -118,8 +138,10 @@ export default function TeacherDashboard() {
         api.get("/teacher/matieres"),
       ]);
 
-      const nextSessions = Array.isArray(sessionsRes.data) ? sessionsRes.data : [];
-      const assignedMatieres = Array.isArray(matieresRes.data)
+      const nextSessions: Session[] = Array.isArray(sessionsRes.data)
+        ? sessionsRes.data
+        : [];
+      const assignedMatieres: Matiere[] = Array.isArray(matieresRes.data)
         ? matieresRes.data
         : Array.isArray((matieresRes.data as any)?.data)
           ? (matieresRes.data as any).data
@@ -178,11 +200,9 @@ export default function TeacherDashboard() {
     }
   }, []);
 
-  useFocusEffect(
-    React.useCallback(() => {
-      fetchData();
-    }, [fetchData])
-  );
+  React.useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   React.useEffect(() => {
     const sub = AppState.addEventListener("change", (state) => {
@@ -309,9 +329,11 @@ export default function TeacherDashboard() {
     }
   };
 
-  const totalHours = sessions
-    .filter((s) => s.statut === "APPROUVE")
-    .reduce((acc, s) => acc + toNumber(s.duree), 0);
+  const totalHours = roundHours(
+    sessions
+    .filter((s) => s.statut === "APPROUVE" && isWithinLast30Days(s.date))
+    .reduce((acc, s) => acc + weightedTeachingHours(s), 0)
+  );
 
   const pendingHours = sessions
     .filter((s) => s.statut === "EN_ATTENTE")
@@ -365,6 +387,7 @@ export default function TeacherDashboard() {
   return (
     <AppLayout
       title="Mon Tableau de Bord"
+      routeName="TeacherDashboard"
       scrollRef={scrollRef}
       headerContent={
         availableYears.length > 0 ? (
@@ -413,7 +436,7 @@ export default function TeacherDashboard() {
           </View>
           <View>
             <Text className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">
-              Total Heures Effectuées
+              Total équivalent CM (30j)
             </Text>
             <Text className="text-2xl font-black text-slate-900 tracking-tight">
               {totalHours} h
