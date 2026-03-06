@@ -30,4 +30,9 @@ class Matiere extends Model
         return $this->belongsToMany(User::class, 'teacher_matieres', 'matiere_id', 'teacher_id')
             ->withTimestamps();
     }
+
+    public function schedules()
+    {
+        return $this->hasMany(Schedule::class);
+    }
 }

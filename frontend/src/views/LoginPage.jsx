@@ -186,7 +186,7 @@ const LoginPage = () => {
                         <div>
                             <div className="flex justify-between items-center mb-2">
                                 <label className="block text-sm font-semibold text-slate-700">Mot de passe</label>
-                                <a href="#" className="text-xs font-semibold text-primary-600 hover:text-primary-700">Oublié ?</a>
+                                <Link to="/forgot-password" className="text-xs font-semibold text-primary-600 hover:text-primary-700">Oublié ?</Link>
                             </div>
                             <div className="relative group">
                                 <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-primary-500 transition-colors" size={20} />

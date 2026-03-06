@@ -16,16 +16,25 @@ class TeacherMatiereController extends Controller
             return response()->json(['message' => 'Non autorisé'], 403);
         }
 
-        $semesters = $user->matieres()
+        $assignedSemesters = $user->matieres()
             ->select(['niveau', 'semestre'])
             ->distinct()
-            ->orderBy('niveau')
-            ->orderBy('semestre')
-            ->get()
-            ->map(fn ($row) => [
+            ->get();
+
+        $scheduledSemesters = \App\Models\Matiere::whereIn('id', 
+                $user->schedules()->pluck('matiere_id')
+            )
+            ->select(['niveau', 'semestre'])
+            ->distinct()
+            ->get();
+
+        $semesters = $assignedSemesters->concat($scheduledSemesters)
+            ->unique(fn($item) => $item->niveau . '-' . $item->semestre)
+            ->map(fn($row) => [
                 'niveau' => $row->niveau,
                 'semestre' => (int) $row->semestre,
             ])
+            ->sortBy(fn($item) => $item['niveau'] . $item['semestre'])
             ->values();
 
         return response()->json(['semesters' => $semesters]);
@@ -43,16 +52,20 @@ class TeacherMatiereController extends Controller
             'semestre' => 'nullable|integer',
         ]);
 
-        $query = $user->matieres()->select('matieres.*');
+        $assignedIds = $user->matieres()->pluck('matieres.id');
+        $scheduledIds = $user->schedules()->pluck('matiere_id');
+        $allIds = $assignedIds->concat($scheduledIds)->unique();
+
+        $query = Matiere::whereIn('id', $allIds);
 
         if ($request->filled('niveau')) {
-            $query->where('matieres.niveau', (string) $request->niveau);
+            $query->where('niveau', (string) $request->niveau);
         }
         if ($request->filled('semestre')) {
-            $query->where('matieres.semestre', (int) $request->semestre);
+            $query->where('semestre', (int) $request->semestre);
         }
 
-        return response()->json($query->orderBy('matieres.code')->get());
+        return response()->json($query->orderBy('code')->get());
     }
 
     public function getTeacherSemesterMatieres(Request $request)

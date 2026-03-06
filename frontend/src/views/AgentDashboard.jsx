@@ -17,10 +17,10 @@ import {
     Plus,
     BookOpen,
     Filter,
-    ChevronRight,
     ArrowUpRight,
     Download,
-    RotateCcw
+    RotateCcw,
+    Camera
 } from 'lucide-react';
 import api from '../services/api';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -57,6 +57,7 @@ const AgentDashboard = () => {
     });
 
     const [rejectionModal, setRejectionModal] = useState({ show: false, sessionId: null, reason: '' });
+    const [photoModal, setPhotoModal] = useState({ show: false, url: null });
 
     // Assignments (Agent/Admin): assign matieres to teachers by semester
     const [assignModalOpen, setAssignModalOpen] = useState(false);
@@ -72,6 +73,8 @@ const AgentDashboard = () => {
     const [reportTeacherId, setReportTeacherId] = useState('');
     const [reportDateFrom, setReportDateFrom] = useState('');
     const [reportDateTo, setReportDateTo] = useState('');
+    const [reportNiveau, setReportNiveau] = useState('');
+    const [reportSemestre, setReportSemestre] = useState('');
     const [exporting, setExporting] = useState(false);
 
     useEffect(() => {
@@ -81,7 +84,7 @@ const AgentDashboard = () => {
 
     useEffect(() => {
         fetchPointages();
-    }, [activeTab, reportTeacherId, reportDateFrom, reportDateTo]);
+    }, [activeTab, reportTeacherId, reportDateFrom, reportDateTo, reportNiveau, reportSemestre]);
 
     const loadTeachers = async () => {
         try {
@@ -221,6 +224,8 @@ const AgentDashboard = () => {
                     teacher_id: reportTeacherId || undefined,
                     date_from: reportDateFrom || undefined,
                     date_to: reportDateTo || undefined,
+                    niveau: reportNiveau || undefined,
+                    semestre: reportSemestre || undefined,
                 }
                 : undefined;
             const res = await api.get(endpoint, { params });
@@ -288,6 +293,40 @@ const AgentDashboard = () => {
         setReportTeacherId('');
         setReportDateFrom('');
         setReportDateTo('');
+        setReportNiveau('');
+        setReportSemestre('');
+    };
+
+    const exportAccountingXls = async () => {
+        setExporting(true);
+        try {
+            const params = {
+                date_from: reportDateFrom || undefined,
+                date_to: reportDateTo || undefined,
+            };
+
+            // Use axios (api) to include authentication headers
+            const response = await api.get('/admin/export-accounting', {
+                params,
+                responseType: 'blob', // Important for file downloads
+            });
+
+            // Create a link and trigger download
+            const url = window.URL.createObjectURL(new Blob([response.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            const dateStr = new Date().toISOString().split('T')[0];
+            link.setAttribute('download', `export_comptable_${dateStr}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+        } catch (err) {
+            console.error("Error exporting accounting:", err);
+            alert("Erreur lors de l'exportation comptable. Assurez-vous d'être bien connecté.");
+        } finally {
+            setExporting(false);
+        }
     };
 
     const exportValidatedSessionsCsv = async () => {
@@ -298,6 +337,8 @@ const AgentDashboard = () => {
                 'Enseignant',
                 'Email',
                 'Matiere',
+                'Niveau',
+                'Semestre',
                 'Type',
                 'Date',
                 'Heure debut',
@@ -309,6 +350,8 @@ const AgentDashboard = () => {
                 session.teacher?.name || '',
                 session.teacher?.email || '',
                 session.matiere?.nom || '',
+                session.matiere?.niveau || '',
+                session.matiere?.semestre ? globalSemesterLabel(session.matiere.niveau, session.matiere.semestre) : '',
                 session.type_seance || '',
                 session.date || '',
                 session.heure_debut || '',
@@ -366,14 +409,14 @@ const AgentDashboard = () => {
             trendColor: 'text-emerald-600'
         },
         {
-            label: 'Volume Horaire (30j)',
-            value: `${dashboardStats.total_hours}h`,
+            label: `Volume Horaire (${new Date().toLocaleDateString('fr-FR', { month: 'long' }).toUpperCase()})`,
+            value: `${Number(dashboardStats.total_hours).toFixed(1).replace('.0', '')}h`,
             icon: Clock,
             color: 'text-blue-500',
             bg: 'bg-blue-500/10',
             border: 'border-blue-500/20',
             desc: 'Cumul validé',
-            trend: '30 derniers jours',
+            trend: 'Période du mois en cours',
             trendColor: 'text-slate-500'
         },
     ];
@@ -384,6 +427,14 @@ const AgentDashboard = () => {
         <AppLayout title="Administration Scolarité">
             <div className="min-h-screen bg-slate-50/50 pb-20">
                 {/* Assignment Modal */}
+                <style>{`
+                    .stat-card-value {
+                        white-space: nowrap;
+                        overflow: hidden;
+                        text-overflow: ellipsis;
+                        max-width: 100%;
+                    }
+                `}</style>
                 <AnimatePresence>
                     {assignModalOpen && (
                         <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
@@ -635,6 +686,43 @@ const AgentDashboard = () => {
                     )}
                 </AnimatePresence>
 
+                {/* Photo Modal */}
+                <AnimatePresence>
+                    {photoModal.show && (
+                        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4">
+                            <motion.div
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+                                onClick={() => setPhotoModal({ show: false, url: null })}
+                            />
+                            <motion.div
+                                initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.95, y: 20 }}
+                                className="relative bg-white p-4 rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col"
+                            >
+                                <div className="flex justify-end mb-4">
+                                    <button
+                                        onClick={() => setPhotoModal({ show: false, url: null })}
+                                        className="p-2 bg-slate-100 text-slate-500 hover:text-red-500 hover:bg-red-50 rounded-full transition-all"
+                                    >
+                                        <X size={24} />
+                                    </button>
+                                </div>
+                                <div className="flex-1 overflow-auto rounded-2xl bg-slate-100 border border-slate-200 flex items-center justify-center overflow-hidden">
+                                    <img
+                                        src={`http://localhost:8000/storage/${photoModal.url}`}
+                                        alt="Preuve physique"
+                                        className="max-w-full max-h-[70vh] object-contain rounded-xl"
+                                    />
+                                </div>
+                            </motion.div>
+                        </div>
+                    )}
+                </AnimatePresence>
+
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
                     {/* Header Section */}
                     <header className="mb-10">
@@ -683,7 +771,7 @@ const AgentDashboard = () => {
                                         </div>
                                     </div>
                                     <div>
-                                        <div className="text-3xl font-extrabold text-slate-900 tracking-tight mb-1">{stat.value}</div>
+                                        <div className="text-3xl font-extrabold text-slate-900 tracking-tight mb-1 stat-card-value">{stat.value}</div>
                                         <div className="text-sm font-medium text-slate-400">{stat.label}</div>
                                     </div>
                                 </motion.div>
@@ -736,7 +824,7 @@ const AgentDashboard = () => {
                             </div>
                             {activeTab === 'validated' && (
                                 <div className="mt-4 flex flex-col xl:flex-row xl:items-end gap-4">
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 flex-1">
+                                    <div className="grid grid-cols-1 md:grid-cols-5 gap-4 flex-1">
                                         <div>
                                             <label className="block text-xs font-black text-slate-700 uppercase tracking-wide mb-2">
                                                 Enseignant
@@ -778,6 +866,34 @@ const AgentDashboard = () => {
                                                 className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all text-slate-800 font-semibold"
                                             />
                                         </div>
+                                        <div>
+                                            <label className="block text-xs font-black text-slate-700 uppercase tracking-wide mb-2">Niveau</label>
+                                            <select
+                                                value={reportNiveau}
+                                                onChange={(e) => {
+                                                    setReportNiveau(e.target.value);
+                                                    setReportSemestre('');
+                                                }}
+                                                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all text-slate-800 font-semibold"
+                                            >
+                                                <option value="">Tous les niveaux</option>
+                                                {ACADEMIC_LEVELS.map(n => <option key={n} value={n}>{n}</option>)}
+                                            </select>
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-black text-slate-700 uppercase tracking-wide mb-2">Semestre</label>
+                                            <select
+                                                value={reportSemestre}
+                                                onChange={(e) => setReportSemestre(e.target.value)}
+                                                className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500 transition-all text-slate-800 font-semibold"
+                                                disabled={!reportNiveau}
+                                            >
+                                                <option value="">Tous les semestres</option>
+                                                {reportNiveau && getSemestresForNiveau(reportNiveau).map(s => (
+                                                    <option key={s} value={s}>{globalSemesterLabel(reportNiveau, s)}</option>
+                                                ))}
+                                            </select>
+                                        </div>
                                     </div>
                                     <div className="flex items-center gap-3">
                                         <button
@@ -794,11 +910,26 @@ const AgentDashboard = () => {
                                                 "py-3 px-4 rounded-xl font-semibold inline-flex items-center gap-2 transition-all",
                                                 filteredPointages.length === 0 || exporting
                                                     ? "bg-slate-200 text-slate-500 cursor-not-allowed"
-                                                    : "bg-emerald-600 text-white hover:bg-emerald-700 shadow-lg shadow-emerald-500/20",
+                                                    : "bg-emerald-600/10 text-emerald-600 hover:bg-emerald-600 hover:text-white border border-emerald-100 shadow-sm",
                                             ].join(' ')}
+                                            title="Export détaillé des séances"
                                         >
                                             <Download size={16} strokeWidth={2.5} />
-                                            {exporting ? 'Export...' : 'Exporter CSV'}
+                                            CSV Séances
+                                        </button>
+                                        <button
+                                            onClick={exportAccountingXls}
+                                            disabled={exporting}
+                                            className={[
+                                                "py-3 px-4 rounded-xl font-semibold inline-flex items-center gap-2 transition-all",
+                                                exporting
+                                                    ? "bg-slate-200 text-slate-500 cursor-not-allowed"
+                                                    : "bg-primary-600 text-white hover:bg-primary-700 shadow-lg shadow-primary-500/20",
+                                            ].join(' ')}
+                                            title="Export récapitulatif pour la comptabilité"
+                                        >
+                                            <FileSearch size={16} strokeWidth={2.5} />
+                                            {exporting ? 'Export...' : 'Export Comptable (XLS)'}
                                         </button>
                                     </div>
                                 </div>
@@ -863,7 +994,14 @@ const AgentDashboard = () => {
                                                         </td>
                                                         <td className="px-6 py-5">
                                                             <div className="flex flex-col gap-1">
-                                                                <span className="font-semibold text-slate-700">{p.matiere?.nom}</span>
+                                                                <div className="flex items-center gap-2">
+                                                                    <span className="font-semibold text-slate-700">{p.matiere?.nom}</span>
+                                                                    {p.matiere?.niveau && (
+                                                                        <span className="px-1.5 py-0.5 bg-slate-100 text-slate-500 text-[10px] font-bold rounded">
+                                                                            {p.matiere.niveau} {p.matiere?.semestre ? `- ${globalSemesterLabel(p.matiere.niveau, p.matiere.semestre)}` : ''}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
                                                                 <div className="flex items-center gap-2">
                                                                     <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider border ${p.type_seance === 'CM' ? 'bg-purple-50 text-purple-600 border-purple-100' :
                                                                         p.type_seance === 'TP' ? 'bg-pink-50 text-pink-600 border-pink-100' :
@@ -905,25 +1043,36 @@ const AgentDashboard = () => {
                                                             )}
                                                         </td>
                                                         <td className="px-8 py-5 text-right">
-                                                            {p.statut === 'EN_ATTENTE' && (
-                                                                <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transform translate-x-4 group-hover:translate-x-0 transition-all duration-200">
+                                                            <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transform translate-x-4 group-hover:translate-x-0 transition-all duration-200">
+                                                                {p.preuve_photo && (
                                                                     <button
-                                                                        onClick={() => handleApprove(p.id)}
-                                                                        className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 hover:bg-emerald-500 hover:text-white border border-emerald-100 shadow-sm transition-all flex items-center justify-center hover:shadow-emerald-500/30"
-                                                                        title="Approuver"
+                                                                        onClick={() => setPhotoModal({ show: true, url: p.preuve_photo })}
+                                                                        className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 hover:bg-blue-500 hover:text-white border border-blue-100 shadow-sm transition-all flex items-center justify-center mr-2"
+                                                                        title="Voir la preuve"
                                                                     >
-                                                                        <Check size={20} strokeWidth={2.5} />
+                                                                        <Camera size={20} strokeWidth={2.5} />
                                                                     </button>
-                                                                    <button
-                                                                        onClick={() => handleRejectClick(p.id)}
-                                                                        className="w-10 h-10 rounded-xl bg-white text-slate-400 hover:bg-red-50 hover:text-red-500 border border-slate-200 hover:border-red-100 shadow-sm transition-all flex items-center justify-center"
-                                                                        title="Rejeter"
-                                                                    >
-                                                                        <X size={20} strokeWidth={2.5} />
-                                                                    </button>
-                                                                </div>
-                                                            )}
-                                                            {p.statut !== 'EN_ATTENTE' && (
+                                                                )}
+                                                                {p.statut === 'EN_ATTENTE' && (
+                                                                    <>
+                                                                        <button
+                                                                            onClick={() => handleApprove(p.id)}
+                                                                            className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 hover:bg-emerald-500 hover:text-white border border-emerald-100 shadow-sm transition-all flex items-center justify-center hover:shadow-emerald-500/30"
+                                                                            title="Approuver"
+                                                                        >
+                                                                            <Check size={20} strokeWidth={2.5} />
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={() => handleRejectClick(p.id)}
+                                                                            className="w-10 h-10 rounded-xl bg-white text-slate-400 hover:bg-red-50 hover:text-red-500 border border-slate-200 hover:border-red-100 shadow-sm transition-all flex items-center justify-center"
+                                                                            title="Rejeter"
+                                                                        >
+                                                                            <X size={20} strokeWidth={2.5} />
+                                                                        </button>
+                                                                    </>
+                                                                )}
+                                                            </div>
+                                                            {p.statut !== 'EN_ATTENTE' && !p.preuve_photo && (
                                                                 <button className="text-slate-300 hover:text-slate-600 transition-colors">
                                                                     <MoreHorizontal size={20} />
                                                                 </button>

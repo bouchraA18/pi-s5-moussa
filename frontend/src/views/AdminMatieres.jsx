@@ -152,7 +152,7 @@ const AdminMatieres = () => {
         },
         {
             label: 'Volume Horaire',
-            value: `${hoursTotal}h`,
+            value: `${Number(hoursTotal).toFixed(1).replace('.0', '')}h`,
             icon: Clock,
             gradient: 'from-amber-400 to-orange-500',
             bg: 'bg-amber-50',
@@ -184,6 +184,14 @@ const AdminMatieres = () => {
                 <div className="absolute top-40 right-10 w-96 h-96 bg-indigo-100 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob" />
                 <div className="absolute -top-20 left-40 w-72 h-72 bg-purple-100 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-2000" />
 
+                <style>{`
+                    .stat-card-value {
+                        white-space: nowrap;
+                        overflow: hidden;
+                        text-overflow: ellipsis;
+                        max-width: 100%;
+                    }
+                `}</style>
                 <AnimatePresence>
                     {isModalOpen && (
                         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
@@ -389,8 +397,8 @@ const AdminMatieres = () => {
                                     </div>
                                 </div>
                                 <div className="space-y-1">
-                                    <span className="text-4xl font-extrabold text-slate-800 tracking-tight">{stat.value}</span>
-                                    <h3 className="text-slate-500 font-medium text-sm">{stat.label}</h3>
+                                    <h3 className="text-4xl font-extrabold text-slate-800 tracking-tight stat-card-value">{stat.value}</h3>
+                                    <p className="text-slate-500 font-medium text-sm">{stat.label}</p>
                                 </div>
                             </motion.div>
                         ))}

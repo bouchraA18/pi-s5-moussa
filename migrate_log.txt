@@ -1,0 +1,128 @@
+﻿
+   INFO  Running migrations.  
+
+  2026_02_11_231449_create_sessions_table  17ms FAIL
+
+   Illuminate\Database\QueryException 
+
+  SQLSTATE[42P07]: Duplicate table: 7 ERREUR:  la relation ┬½ sessions ┬╗ existe d├®j├á (Connection: pgsql, SQL: create table "sessions" ("id" bigserial not null primary key, "date" date not null, "heure_debut" time(0) without time zone not null, "heure_fin" time(0) without time zone not null, "duree" double precision not null, "type_seance" varchar(255) check ("type_seance" in ('CM', 'TD', 'TP')) not null, "statut" varchar(255) check ("statut" in ('EN_ATTENTE', 'APPROUVE', 'REJETE')) not null default 'EN_ATTENTE', "motif_rejet" text null, "enseignant_id" bigint not null, "matiere_id" bigint not null, "annee_scolaire_id" bigint not null, "date_validation" timestamp(0) without time zone null, "created_at" timestamp(0) without time zone null, "updated_at" timestamp(0) without time zone null))
+
+  at vendor\laravel\framework\src\Illuminate\Database\Connection.php:829
+    825Ôûò                     $this->getName(), $query, $this->prepareBindings($bindings), $e
+    826Ôûò                 );
+    827Ôûò             }
+    828Ôûò 
+  Ô×£ 829Ôûò             throw new QueryException(
+    830Ôûò                 $this->getName(), $query, $this->prepareBindings($bindings), $e
+    831Ôûò             );
+    832Ôûò         }
+    833Ôûò     }
+
+  1   vendor\laravel\framework\src\Illuminate\Database\Connection.php:587
+      PDOException::("SQLSTATE[42P07]: Duplicate table: 7 ERREUR:  la relation ┬½ sessions ┬╗ existe d├®j├á")
+
+  2   vendor\laravel\framework\src\Illuminate\Database\Connection.php:587
+      PDOStatement::execute()
+
+  3   vendor\laravel\framework\src\Illuminate\Database\Connection.php:816
+      Illuminate\Database\Connection::Illuminate\Database\{closure}("create table "sessions" ("id" bigserial not null primary key, "date" date not null, "heure_debut" time(0) without time zone not null, "heure_fin" time(0) without time zone not null, "duree" double precision not null, "type_seance" varchar(255) check ("type_seance" in ('CM', 'TD', 'TP')) not null, "statut" varchar(255) check ("statut" in ('EN_ATTENTE', 'APPROUVE', 'REJETE')) not null default 'EN_ATTENTE', "motif_rejet" text null, "enseignant_id" bigint not null, "matiere_id" bigint not null, "annee_scolaire_id" bigint not null, "date_validation" timestamp(0) without time zone null, "created_at" timestamp(0) without time zone null, "updated_at" timestamp(0) without time zone null)", [])
+
+  4   vendor\laravel\framework\src\Illuminate\Database\Connection.php:783
+      Illuminate\Database\Connection::runQueryCallback("create table "sessions" ("id" bigserial not null primary key, "date" date not null, "heure_debut" time(0) without time zone not null, "heure_fin" time(0) without time zone not null, "duree" double precision not null, "type_seance" varchar(255) check ("type_seance" in ('CM', 'TD', 'TP')) not null, "statut" varchar(255) check ("statut" in ('EN_ATTENTE', 'APPROUVE', 'REJETE')) not null default 'EN_ATTENTE', "motif_rejet" text null, "enseignant_id" bigint not null, "matiere_id" bigint not null, "annee_scolaire_id" bigint not null, "date_validation" timestamp(0) without time zone null, "created_at" timestamp(0) without time zone null, "updated_at" timestamp(0) without time zone null)", [], Object(Closure))
+
+  5   vendor\laravel\framework\src\Illuminate\Database\Connection.php:588
+      Illuminate\Database\Connection::run("create table "sessions" ("id" bigserial not null primary key, "date" date not null, "heure_debut" time(0) without time zone not null, "heure_fin" time(0) without time zone not null, "duree" double precision not null, "type_seance" varchar(255) check ("type_seance" in ('CM', 'TD', 'TP')) not null, "statut" varchar(255) check ("statut" in ('EN_ATTENTE', 'APPROUVE', 'REJETE')) not null default 'EN_ATTENTE', "motif_rejet" text null, "enseignant_id" bigint not null, "matiere_id" bigint not null, "annee_scolaire_id" bigint not null, "date_validation" timestamp(0) without time zone null, "created_at" timestamp(0) without time zone null, "updated_at" timestamp(0) without time zone null)", [], Object(Closure))
+
+  6   vendor\laravel\framework\src\Illuminate\Database\Schema\Blueprint.php:110
+      Illuminate\Database\Connection::statement("create table "sessions" ("id" bigserial not null primary key, "date" date not null, "heure_debut" time(0) without time zone not null, "heure_fin" time(0) without time zone not null, "duree" double precision not null, "type_seance" varchar(255) check ("type_seance" in ('CM', 'TD', 'TP')) not null, "statut" varchar(255) check ("statut" in ('EN_ATTENTE', 'APPROUVE', 'REJETE')) not null default 'EN_ATTENTE', "motif_rejet" text null, "enseignant_id" bigint not null, "matiere_id" bigint not null, "annee_scolaire_id" bigint not null, "date_validation" timestamp(0) without time zone null, "created_at" timestamp(0) without time zone null, "updated_at" timestamp(0) without time zone null)")
+
+  7   vendor\laravel\framework\src\Illuminate\Database\Schema\Builder.php:602
+      Illuminate\Database\Schema\Blueprint::build(Object(Illuminate\Database\PostgresConnection), Object(Illuminate\Database\Schema\Grammars\PostgresGrammar))
+
+  8   vendor\laravel\framework\src\Illuminate\Database\Schema\Builder.php:460
+      Illuminate\Database\Schema\Builder::build(Object(Illuminate\Database\Schema\Blueprint))
+
+  9   vendor\laravel\framework\src\Illuminate\Support\Facades\Facade.php:355
+      Illuminate\Database\Schema\Builder::create("sessions", Object(Closure))
+
+  10  database\migrations\2026_02_11_231449_create_sessions_table.php:30
+      Illuminate\Support\Facades\Facade::__callStatic("create")
+
+  11  vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:501
+      Illuminate\Database\Migrations\Migration@anonymous\C:\Users\lapto\Documents\backend\database\migrations\2026_02_11_231449_create_sessions_table.php:7$100::up()
+
+  12  vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:418
+      Illuminate\Database\Migrations\Migrator::runMethod(Object(Illuminate\Database\PostgresConnection), Object(Illuminate\Database\Migrations\Migration@anonymous\C:\Users\lapto\Documents\backend\database\migrations\2026_02_11_231449_create_sessions_table.php:7$100), "up")
+
+  13  vendor\laravel\framework\src\Illuminate\Database\Concerns\ManagesTransactions.php:30
+      Illuminate\Database\Migrations\Migrator::Illuminate\Database\Migrations\{closure}(Object(Illuminate\Database\PostgresConnection))
+
+  14  vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:426
+      Illuminate\Database\Connection::transaction(Object(Closure))
+
+  15  vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:224
+      Illuminate\Database\Migrations\Migrator::runMigration(Object(Illuminate\Database\Migrations\Migration@anonymous\C:\Users\lapto\Documents\backend\database\migrations\2026_02_11_231449_create_sessions_table.php:7$100), "up")
+
+  16  vendor\laravel\framework\src\Illuminate\Console\View\Components\Task.php:37
+      Illuminate\Database\Migrations\Migrator::Illuminate\Database\Migrations\{closure}()
+
+  17  vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:783
+      Illuminate\Console\View\Components\Task::render("2026_02_11_231449_create_sessions_table", Object(Closure))
+
+  18  vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:224
+      Illuminate\Database\Migrations\Migrator::write("Illuminate\Console\View\Components\Task", "2026_02_11_231449_create_sessions_table", Object(Closure))
+
+  19  vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:189
+      Illuminate\Database\Migrations\Migrator::runUp("C:\Users\lapto\Documents\backend\database\migrations/2026_02_11_231449_create_sessions_table.php")
+
+  20  vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:132
+      Illuminate\Database\Migrations\Migrator::runPending([])
+
+  21  vendor\laravel\framework\src\Illuminate\Database\Console\Migrations\MigrateCommand.php:92
+      Illuminate\Database\Migrations\Migrator::run([])
+
+  22  vendor\laravel\framework\src\Illuminate\Database\Migrations\Migrator.php:641
+      Illuminate\Database\Console\Migrations\MigrateCommand::Illuminate\Database\Console\Migrations\{closure}()
+
+  23  vendor\laravel\framework\src\Illuminate\Database\Console\Migrations\MigrateCommand.php:104
+      Illuminate\Database\Migrations\Migrator::usingConnection(Object(Closure))
+
+  24  vendor\laravel\framework\src\Illuminate\Container\BoundMethod.php:36
+      Illuminate\Database\Console\Migrations\MigrateCommand::handle()
+
+  25  vendor\laravel\framework\src\Illuminate\Container\Util.php:41
+      Illuminate\Container\BoundMethod::Illuminate\Container\{closure}()
+
+  26  vendor\laravel\framework\src\Illuminate\Container\BoundMethod.php:93
+      Illuminate\Container\Util::unwrapIfClosure(Object(Closure))
+
+  27  vendor\laravel\framework\src\Illuminate\Container\BoundMethod.php:37
+      Illuminate\Container\BoundMethod::callBoundMethod(Object(Illuminate\Foundation\Application), Object(Closure))
+
+  28  vendor\laravel\framework\src\Illuminate\Container\Container.php:662
+      Illuminate\Container\BoundMethod::call(Object(Illuminate\Foundation\Application), [])
+
+  29  vendor\laravel\framework\src\Illuminate\Console\Command.php:211
+      Illuminate\Container\Container::call()
+
+  30  vendor\symfony\console\Command\Command.php:326
+      Illuminate\Console\Command::execute(Object(Symfony\Component\Console\Input\ArgvInput), Object(Illuminate\Console\OutputStyle))
+
+  31  vendor\laravel\framework\src\Illuminate\Console\Command.php:181
+      Symfony\Component\Console\Command\Command::run(Object(Symfony\Component\Console\Input\ArgvInput), Object(Illuminate\Console\OutputStyle))
+
+  32  vendor\symfony\console\Application.php:1106
+      Illuminate\Console\Command::run(Object(Symfony\Component\Console\Input\ArgvInput), Object(Symfony\Component\Console\Output\ConsoleOutput))
+
+  33  vendor\symfony\console\Application.php:324
+      Symfony\Component\Console\Application::doRunCommand(Object(Illuminate\Database\Console\Migrations\MigrateCommand), Object(Symfony\Component\Console\Input\ArgvInput), Object(Symfony\Component\Console\Output\ConsoleOutput))
+
+  34  vendor\symfony\console\Application.php:175
+      Symfony\Component\Console\Application::doRun(Object(Symfony\Component\Console\Input\ArgvInput), Object(Symfony\Component\Console\Output\ConsoleOutput))
+
+  35  vendor\laravel\framework\src\Illuminate\Foundation\Console\Kernel.php:201
+      Symfony\Component\Console\Application::run(Object(Symfony\Component\Console\Input\ArgvInput), Object(Symfony\Component\Console\Output\ConsoleOutput))
+
+  36  artisan:37
+      Illuminate\Foundation\Console\Kernel::handle(Object(Symfony\Component\Console\Input\ArgvInput), Object(Symfony\Component\Console\Output\ConsoleOutput))
+

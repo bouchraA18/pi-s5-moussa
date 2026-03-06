@@ -193,6 +193,14 @@ const AdminUsers = () => {
                 <div className="absolute top-20 right-20 w-72 h-72 bg-purple-100 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob" />
                 <div className="absolute top-20 left-20 w-72 h-72 bg-blue-100 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-blob animation-delay-2000" />
 
+                <style>{`
+                    .stat-card-value {
+                        white-space: nowrap;
+                        overflow: hidden;
+                        text-overflow: ellipsis;
+                        max-width: 100%;
+                    }
+                `}</style>
                 <AnimatePresence>
                     {isModalOpen && (
                         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
@@ -378,7 +386,7 @@ const AdminUsers = () => {
                                     </div>
                                 </div>
                                 <div className="space-y-1">
-                                    <span className="text-4xl font-extrabold text-slate-800 tracking-tight">{stat.value}</span>
+                                    <span className="text-4xl font-extrabold text-slate-800 tracking-tight stat-card-value">{stat.value}</span>
                                     <h3 className="text-slate-500 font-medium text-sm">{stat.label}</h3>
                                 </div>
                                 {/* Decorative gradient blur */}

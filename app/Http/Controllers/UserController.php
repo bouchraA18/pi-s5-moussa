@@ -27,7 +27,7 @@ class UserController extends Controller
         $role = (string) $request->input('role', '');
 
         $emailRules = ['required', 'email', 'unique:users,email'];
-        if ($role !== 'ADMINISTRATEUR') {
+        if ($role === 'ENSEIGNANT') {
             $emailRules[] = 'ends_with:@' . $domain;
         }
 
@@ -72,7 +72,7 @@ class UserController extends Controller
         $role = (string) $request->input('role', '');
 
         $emailRules = ['required', 'email', Rule::unique('users')->ignore($user->id)];
-        if ($role !== 'ADMINISTRATEUR') {
+        if ($role === 'ENSEIGNANT') {
             $emailRules[] = 'ends_with:@' . $domain;
         }
 

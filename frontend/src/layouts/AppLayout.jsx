@@ -119,6 +119,12 @@ const AppLayout = ({ children, title, navbarContent }) => {
                                     >
                                         Matières & Modules
                                     </button>
+                                    <button
+                                        onClick={() => navigate('/admin/schedules')}
+                                        className={`px-4 py-2 rounded-lg text-sm font-bold transition-all ${window.location.pathname === '/admin/schedules' ? 'bg-primary-50 text-primary-700' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50'}`}
+                                    >
+                                        Planning
+                                    </button>
                                 </div>
                             )}
 
@@ -249,7 +255,7 @@ const AppLayout = ({ children, title, navbarContent }) => {
             </nav>
 
             {/* Main Content */}
-            <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 animate-in fade-in duration-500">
+            <main className="flex-1 w-full max-w-screen-2xl mx-auto px-6 sm:px-10 lg:px-16 py-8 animate-in fade-in duration-500">
                 <div className="mb-8">
                     <h1 className="text-2xl font-bold text-slate-900">{title}</h1>
                 </div>

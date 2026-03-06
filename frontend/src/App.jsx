@@ -7,12 +7,17 @@ import AgentDashboard from './views/AgentDashboard';
 import ProfilePage from './views/ProfilePage';
 import AdminUsers from './views/AdminUsers';
 import AdminMatieres from './views/AdminMatieres';
+import AdminSchedules from './views/AdminSchedules';
+import ForgotPassword from './views/ForgotPassword';
+import ResetPassword from './views/ResetPassword';
 
 function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/" element={<Navigate to="/login" replace />} />
 
       <Route path="/teacher-dashboard" element={<TeacherDashboard />} />
@@ -22,6 +27,7 @@ function App() {
       {/* Admin Routes */}
       <Route path="/admin/users" element={<AdminUsers />} />
       <Route path="/admin/matieres" element={<AdminMatieres />} />
+      <Route path="/admin/schedules" element={<AdminSchedules />} />
     </Routes>
   );
 }

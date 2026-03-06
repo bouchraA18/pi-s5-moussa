@@ -23,6 +23,7 @@ class Session extends Model
         'type_seance',
         'statut',
         'motif_rejet',
+        'preuve_photo',
         'enseignant_id',
         'matiere_id',
         'annee_scolaire_id',

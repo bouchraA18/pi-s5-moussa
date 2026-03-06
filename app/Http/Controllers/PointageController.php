@@ -14,14 +14,6 @@ use Illuminate\Validation\Rule;
 
 class PointageController extends Controller
 {
-    private const TIME_SLOTS = [
-        ['08:00', '09:30'],
-        ['09:45', '11:15'],
-        ['11:30', '13:00'],
-        ['15:00', '16:30'],
-        ['17:00', '18:30'],
-    ];
-
     public function index()
     {
         $user = Auth::user();
@@ -40,31 +32,50 @@ class PointageController extends Controller
             return response()->json(['message' => 'Non autorisé'], 403);
         }
 
-        $allowedStarts = array_map(fn ($s) => $s[0], self::TIME_SLOTS);
-        $allowedEnds = array_map(fn ($s) => $s[1], self::TIME_SLOTS);
-
         $request->validate([
             'matiere_id' => 'required|exists:matieres,id',
             'date' => 'required|date',
-            'heure_debut' => ['required', 'date_format:H:i', Rule::in($allowedStarts)],
-            'heure_fin' => ['required', 'date_format:H:i', Rule::in($allowedEnds)],
+            'heure_debut' => ['required', 'date_format:H:i'],
+            'heure_fin' => ['required', 'date_format:H:i', 'after:heure_debut'],
             'type_seance' => 'required|in:CM,TD,TP',
             'annee_scolaire_id' => 'required|exists:annee_scolaires,id',
+            'preuve_photo' => 'nullable|image|max:5120', // max 5MB
         ]);
 
-        $slotValid = in_array([$request->heure_debut, $request->heure_fin], self::TIME_SLOTS, true);
-        if (!$slotValid) {
-            return response()->json(['message' => "Horaire invalide"], 422);
-        }
-
         $matiereId = (int) $request->matiere_id;
-        if (!$user->matieres()->whereKey($matiereId)->exists()) {
+        $isAssigned = $user->matieres()->whereKey($matiereId)->exists() || 
+                      $user->schedules()->where('matiere_id', $matiereId)->exists();
+
+        if (!$isAssigned) {
             return response()->json(['message' => "Matière non assignée à cet enseignant."], 403);
         }
+        // Anti-doublon check — normalize to H:i:s to match MySQL time format
+        $heureDebut = date('H:i:s', strtotime($request->heure_debut));
+        $heureFin   = date('H:i:s', strtotime($request->heure_fin));
+
+        $exists = Session::where('enseignant_id', Auth::id())
+            ->where('matiere_id', $matiereId)
+            ->where('date', $request->date)
+            ->whereTime('heure_debut', '>=', substr($heureDebut, 0, 5) . ':00')
+            ->whereTime('heure_debut', '<=', substr($heureDebut, 0, 5) . ':59')
+            ->whereTime('heure_fin', '>=', substr($heureFin, 0, 5) . ':00')
+            ->whereTime('heure_fin', '<=', substr($heureFin, 0, 5) . ':59')
+            ->exists();
+
+        if ($exists) {
+            return response()->json(['message' => "Cette séance a déjà été pointée pour ce créneau."], 422);
+        }
+
         // Basic duration calculation (can be improved)
         $start = strtotime($request->heure_debut);
         $end = strtotime($request->heure_fin);
         $duree = ($end - $start) / 3600;
+
+        // Handle file upload
+        $photoPath = null;
+        if ($request->hasFile('preuve_photo')) {
+            $photoPath = $request->file('preuve_photo')->store('preuves', 'public');
+        }
 
         $session = Session::create([
             'enseignant_id' => Auth::id(),
@@ -76,6 +87,7 @@ class PointageController extends Controller
             'duree' => $duree,
             'type_seance' => $request->type_seance,
             'statut' => 'EN_ATTENTE',
+            'preuve_photo' => $photoPath,
         ]);
 
         $session->load(['teacher', 'matiere']);
@@ -110,28 +122,24 @@ class PointageController extends Controller
             return response()->json(['message' => 'Impossible de modifier une séance déjà validée ou rejetée'], 422);
         }
 
-        $allowedStarts = array_map(fn ($s) => $s[0], self::TIME_SLOTS);
-        $allowedEnds = array_map(fn ($s) => $s[1], self::TIME_SLOTS);
-
         $request->validate([
             'matiere_id' => 'required|exists:matieres,id',
             'date' => 'required|date',
-            'heure_debut' => ['required', 'date_format:H:i', Rule::in($allowedStarts)],
-            'heure_fin' => ['required', 'date_format:H:i', Rule::in($allowedEnds)],
+            'heure_debut' => ['required', 'date_format:H:i'],
+            'heure_fin' => ['required', 'date_format:H:i', 'after:heure_debut'],
             'type_seance' => 'required|in:CM,TD,TP',
         ]);
-
-        $slotValid = in_array([$request->heure_debut, $request->heure_fin], self::TIME_SLOTS, true);
-        if (!$slotValid) {
-            return response()->json(['message' => "Horaire invalide"], 422);
-        }
 
         $user = Auth::user();
         $matiereId = (int) $request->matiere_id;
         if (!$user || $user->role !== 'ENSEIGNANT') {
             return response()->json(['message' => 'Non autorisé'], 403);
         }
-        if (!$user->matieres()->whereKey($matiereId)->exists()) {
+        
+        $isAssigned = $user->matieres()->whereKey($matiereId)->exists() || 
+                      $user->schedules()->where('matiere_id', $matiereId)->exists();
+
+        if (!$isAssigned) {
             return response()->json(['message' => "Matière non assignée à cet enseignant."], 403);
         }
         $start = strtotime($request->heure_debut);
@@ -255,7 +263,7 @@ class PointageController extends Controller
 
     public function stats()
     {
-        $rollingStart = now()->subDays(30)->startOfDay();
+        $startOfMonth = now()->startOfMonth();
 
         $pendingCount = Session::where('statut', 'EN_ATTENTE')->count();
         $validatedCount = Session::where('statut', 'APPROUVE')->count(); // Total validated
@@ -267,7 +275,7 @@ class PointageController extends Controller
             ->count();
 
         $approvedSessions = Session::where('statut', 'APPROUVE')
-            ->whereDate('date', '>=', $rollingStart->toDateString())
+            ->whereDate('date', '>=', $startOfMonth->toDateString())
             ->get(['type_seance', 'duree']);
 
         $totalHours = $approvedSessions->sum(
@@ -312,6 +320,88 @@ class PointageController extends Controller
         ]);
     }
 
+    public function exportAccounting(Request $request)
+    {
+        $request->validate([
+            'date_from' => 'nullable|date',
+            'date_to' => 'nullable|date|after_or_equal:date_from',
+        ]);
+
+        $query = Session::with(['teacher', 'matiere'])
+            ->where('statut', 'APPROUVE');
+
+        if ($request->filled('date_from')) {
+            $query->whereDate('date', '>=', $request->date_from);
+        } else {
+            $query->whereDate('date', '>=', now()->startOfMonth());
+        }
+
+        if ($request->filled('date_to')) {
+            $query->whereDate('date', '<=', $request->date_to);
+        }
+
+        $sessions = $query->get();
+
+        $data = $sessions->groupBy(function ($session) {
+            return $session->enseignant_id . '-' . ($session->matiere->niveau ?? 'N/A') . '-' . ($session->matiere->semestre ?? '0');
+        })->map(function ($group) {
+            $first = $group->first();
+            $teacher = $first->teacher;
+            $niveau = $first->matiere->niveau ?? 'N/A';
+            $semestre = $first->matiere->semestre ?? 'N/A';
+            
+            $hoursByTyped = $group->groupBy('type_seance')->map(function ($typeSessions) {
+                return $typeSessions->sum('duree');
+            });
+
+            $cmHours = $hoursByTyped->get('CM', 0);
+            $tdTpHours = $hoursByTyped->get('TD', 0) + $hoursByTyped->get('TP', 0);
+            
+            $weightedTotal = Session::weightedTeachingHours('CM', $cmHours) + 
+                             Session::weightedTeachingHours('TD', $tdTpHours);
+
+            return [
+                'name' => $teacher->name ?? 'Inconnu',
+                'niveau' => $niveau,
+                'semestre' => $semestre != 'N/A' ? "S$semestre" : 'N/A',
+                'cm' => round($cmHours, 2),
+                'td_tp' => round($tdTpHours, 2),
+                'total_equiv' => round($weightedTotal, 2),
+            ];
+        });
+
+        $filename = "recup_comptable_detail_" . now()->format('Y_m_d') . ".csv";
+        
+        $headers = [
+            "Content-type" => "text/csv",
+            "Content-Disposition" => "attachment; filename=$filename",
+            "Pragma" => "no-cache",
+            "Cache-Control" => "must-revalidate, post-check=0, pre-check=0",
+            "Expires" => "0"
+        ];
+
+        $callback = function() use ($data) {
+            $file = fopen('php://output', 'w');
+            fprintf($file, chr(0xEF).chr(0xBB).chr(0xBF));
+            
+            fputcsv($file, ['Enseignant', 'Niveau', 'Semestre', 'Heures CM', 'Heures TD/TP', 'Total Équivalent CM'], ';');
+
+            foreach ($data as $row) {
+                fputcsv($file, [
+                    $row['name'],
+                    $row['niveau'],
+                    $row['semestre'],
+                    str_replace('.', ',', $row['cm']),
+                    str_replace('.', ',', $row['td_tp']),
+                    str_replace('.', ',', $row['total_equiv'])
+                ], ';');
+            }
+            fclose($file);
+        };
+
+        return response()->stream($callback, 200, $headers);
+    }
+
     private function approvedSessionsQuery(Request $request)
     {
         $query = Session::with(['teacher', 'matiere'])
@@ -327,6 +417,18 @@ class PointageController extends Controller
 
         if ($request->filled('date_to')) {
             $query->whereDate('date', '<=', $request->date_to);
+        }
+
+        if ($request->filled('niveau')) {
+            $query->whereHas('matiere', function ($q) use ($request) {
+                $q->where('niveau', $request->niveau);
+            });
+        }
+
+        if ($request->filled('semestre')) {
+            $query->whereHas('matiere', function ($q) use ($request) {
+                $q->where('semestre', $request->semestre);
+            });
         }
 
         return $query;
